@@ -5,7 +5,7 @@ self.addEventListener('install', function (event) {
           .then(function (cache) {
               console.log('[SW] Precaching App Shell')
               cache.addAll([
-                  '/',
+                //   '/',
                   'index.html',
                   'src/js/app.js',
                   'src/js/weather.js',
