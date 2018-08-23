@@ -6,20 +6,20 @@ self.addEventListener('install', function (event) {
               console.log('[SW] Precaching App Shell')
               cache.addAll([
                   '/',
-                  '/index.html',
-                  '/src/js/app.js',
-                  '/src/js/weather.js',
-                  '/src/js/pubnub-gateway.js',
-                  '/src/css/style.css',
-                  '/src/images/temperatureInside-144x144.png',
-                  '/src/images/temperatureOutside.png',
-                  '/src/images/temperatureInside.png',
-                  '/src/images/swimmingPool.png',
-                  '/src/images/sun.png',
-                  '/src/images/weather/10.svg',
-                  '/src/images/weather/11.svg',
-                  '/src/images/weather/22.svg',
-                  '/src/images/weather/30.svg'
+                  'index.html',
+                  'src/js/app.js',
+                  'src/js/weather.js',
+                  'src/js/pubnub-gateway.js',
+                  'src/css/style.css',
+                  'src/images/temperatureInside-144x144.png',
+                  'src/images/temperatureOutside.png',
+                  'src/images/temperatureInside.png',
+                  'src/images/swimmingPool.png',
+                  'src/images/sun.png',
+                  'src/images/weather/10.svg',
+                  'src/images/weather/11.svg',
+                  'src/images/weather/22.svg',
+                  'src/images/weather/30.svg'
               ])
           })
       )
