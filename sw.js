@@ -11,7 +11,7 @@ self.addEventListener('install', function (event) {
                   'src/js/weather.js',
                   'src/js/pubnub-gateway.js',
                   'src/css/style.css',
-                  'src/images/temperatureInside-144x144.png',
+                  'src/images/homemon-144x144.png',
                   'src/images/temperatureOutside.png',
                   'src/images/temperatureInside.png',
                   'src/images/swimmingPool.png',
