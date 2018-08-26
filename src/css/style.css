@@ -70,9 +70,9 @@ header>h1 {
 .room>.temp-display {
   display: flex;
   align-self: center;
-  margin: 1.25em 1rem 1rem;
+  margin: 1em 1rem 1rem;
   font-weight: bold;
-  font-size: 150%;
+  font-size: 250%;
 }
 
 .room>img {
@@ -139,12 +139,21 @@ header>h1 {
     justify-content: center;
     grid-gap: 1rem;
   }
-  @media screen and (max-width: 500px) {
+  @media screen and (max-width: 400px) {
     .grid-rooms {
       /* display: grid; */
       /* grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); */
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
+
+    .room>.temp-display {
+      display: flex;
+      align-self: center;
+      margin: 1.25em 1rem 1rem;
+      font-weight: bold;
+      font-size: 150%;
+    }
+
     .forcast-day>img {
       height: 32px;
       width: 32px;
