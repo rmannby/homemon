@@ -5,13 +5,19 @@ self.addEventListener('install', function (event) {
           .then(function (cache) {
               console.log('[SW] Precaching App Shell')
               cache.addAll([
-                  '/',
+                //   '/',
                   'index.html',
                   'src/js/app.js',
                 //   'src/js/weather.js',
                 //   'src/js/pubnub-gateway.js',
                   'src/css/style.css',
+                  'src/images/homemon-48x48.png',
+                  'src/images/homemon-96x96.png',
                   'src/images/homemon-144x144.png',
+                  'src/images/homemon-192x192.png',
+                  'src/images/homemon-256x256.png',
+                  'src/images/homemon-384x384.png',
+                  'src/images/homemon-512x512.png',
                   'src/images/temperatureOutside.png',
                   'src/images/temperatureInside.png',
                   'src/images/swimmingPool.png',
