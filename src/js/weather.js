@@ -88,35 +88,35 @@ function getWeather() {
       // dayLow.innerHTML = convert(weather.low) + '&deg';
       // wind.innerHTML = 'Vind ' + weather.wind.direction + ' ' + kphToMps(weather.wind.speed) + ' m/s';
       // pressure.innerHTML = 'Bar ' + Math.round(weather.pressure) + ' mbar';
-      // document.getElementById('idImgDay').src = "images/weather/" + weather.code + ".svg";
+      // document.getElementById('idImgDay').src = "images/weather/" + weather.code + ".png";
 
       //Forcast day 0 - Today
       day0.innerHTML = getDayAndDate(weather.forecast[0]);
       forecast0.innerHTML = transCode[weather.forecast[0].code];
       day0High.innerHTML = convert(weather.forecast[0].high) + '&deg';
       day0Low.innerHTML = convert(weather.forecast[0].low) + '&deg';
-      document.getElementById('idImg0').src = "src/images/weather/" + weather.forecast[1].code + ".svg";
+      document.getElementById('idImg0').src = "src/images/weather/" + weather.forecast[1].code + ".png";
 
       //Forcast day 1
       day1.innerHTML = getDayAndDate(weather.forecast[1]);
       forecast1.innerHTML = transCode[weather.forecast[1].code];
       day1High.innerHTML = convert(weather.forecast[1].high) + '&deg';
       day1Low.innerHTML = convert(weather.forecast[1].low) + '&deg';
-      document.getElementById('idImg1').src = "src/images/weather/" + weather.forecast[1].code + ".svg";
+      document.getElementById('idImg1').src = "src/images/weather/" + weather.forecast[1].code + ".png";
 
       //Forcast day 2
       day2.innerHTML = getDayAndDate(weather.forecast[2]);
       forecast2.innerHTML = transCode[weather.forecast[2].code];
       day2High.innerHTML = convert(weather.forecast[2].high) + '&deg';
       day2Low.innerHTML = convert(weather.forecast[2].low) + '&deg';
-      document.getElementById('idImg2').src = "src/images/weather/" + weather.forecast[2].code + ".svg";
+      document.getElementById('idImg2').src = "src/images/weather/" + weather.forecast[2].code + ".png";
 
       //Forcast day 3
       day3.innerHTML = getDayAndDate(weather.forecast[3]);
       forecast3.innerHTML = transCode[weather.forecast[3].code];
       day3High.innerHTML = convert(weather.forecast[3].high) + '&deg';
       day3Low.innerHTML = convert(weather.forecast[3].low) + '&deg';
-      document.getElementById('idImg3').src = "src/images/weather/" + weather.forecast[3].code + ".svg";
+      document.getElementById('idImg3').src = "src/images/weather/" + weather.forecast[3].code + ".png";
 
       //$("#weather").html(html);
       $("#weatherError").html('<p></p>');
