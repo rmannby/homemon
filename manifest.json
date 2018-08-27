@@ -43,8 +43,8 @@
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#3c4669ff",
-  "theme_color": "#02a9e7ff",
+  "background_color": "#6e9a75",
+  "theme_color": "#3f51b5",
   "description": "Home monitor web app",
   "dir": "ltr"
 }
