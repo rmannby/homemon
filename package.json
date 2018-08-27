@@ -1,0 +1,22 @@
+{
+  "name": "homemon",
+  "version": "1.0.0",
+  "description": "PWA home monitor app with PubNub/Rasperry pi gateway",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server -c-1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rmannby/homemon.git"
+  },
+  "author": "Roger Mannby",
+  "license": "ISC",
+  "devDependencies": {
+    "http-server": "^0.10.0"
+  },
+  "bugs": {
+    "url": "https://github.com/rmannby/homemon/issues"
+  },
+  "homepage": "https://github.com/rmannby/homemon#readme"
+}
