@@ -16,6 +16,7 @@ const STATIC_FILES = [
     'src/images/temperatureOutside.png',
     'src/images/temperatureInside.png',
     'src/images/swimmingPool.png',
+    'src/images/mouseTrap.png',
     'src/images/sun.png',
     'src/images/weather/10.png',
     'src/images/weather/11.png',

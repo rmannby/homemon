@@ -47,6 +47,12 @@ header>h1 {
   font-size: 200%;
 }
 
+header>img {
+  margin-left: 2em;
+  height: 32px;
+  width: 32px;
+}
+
 .room {
   display: flex;
   flex-flow: column;

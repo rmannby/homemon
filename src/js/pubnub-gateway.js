@@ -63,15 +63,15 @@ function updateDOM(res) {
   } else if (res["Poolheat"]) {
     poolHeatTemp.innerHTML = (res["Poolheat"] + "°C");
   }
-  //minMaxIn.innerHTML = (res["Poolheat"] + "°C");
+
   // Show/hide mouse direction
   // console.log(res["Mouse trapped"]);
-  // var mouse = document.getElementById("icon-mouse-trap");
-  // if (res["Mouse trapped"] === "Trip") {
-  //   mouse.style.display = "inline";
-  // } else {
-  //   mouse.style.display = "none";
-  // }
+  var mouse = document.getElementById("icon-mouse-trap");
+  if (res["Mouse trapped"] === "Trip") {
+    mouse.style.display = "inline";
+  } else {
+    mouse.style.display = "none";
+  }
   
   getTime();
 }
