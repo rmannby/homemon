@@ -9,9 +9,9 @@ const showMinMax_garage = document.querySelector('#garage')
 
 let minMax = {} //Save min/max object
 
-$(document).ready(function () {
-  console.log('Document ready')
-
+document.addEventListener('DOMContentLoaded', function () {
+  console.log('Document ready');
+  // Rest of your code goes here
 });
 
 function updateDOM(res) {
