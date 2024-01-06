@@ -1,50 +1,17 @@
 import serial, time, datetime, sys
-from pubnub.pnconfiguration import PNConfiguration
-from pubnub.pubnub import PubNub
-from pubnub.callbacks import SubscribeCallback
-#from pubnub.pubnub import Pubnub
+from pubnub import Pubnub
 from xbee import ZigBee
 
-#pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
-
-
-class MySubscribeCallback(SubscribeCallback):
-    def status(self, pubnub, status):
-        pass
-
-    def presence(self, pubnub, presence):
-        pass
-
-    def message(self, pubnub, message):
-        print(message.message)
-        
-        
-
-def publish_callback(result, status):
-    if not status.is_error():
-        print('Message published successfully')
-    else:
-        print('Publish failed')
-
-
-pnconfig = PNConfiguration()
-pnconfig.subscribe_key = 'sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe'
-pnconfig.publish_key = 'pub-c-6a121d53-b962-4a48-b425-10281417b24d'
-pnconfig.user_id = 'mby_user'
-
-pubnub = PubNub(pnconfig)
-pubnub.add_listener(MySubscribeCallback())
-pubnub.subscribe().channels('RpiGate').execute()
-
-#channel = 'RpiGate'
+pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
+channel = 'RpiGate'
 
 pool_node = '\x14\xa6'
-pool_node_long = b'\x00\x13\xa2\x00A\x05p;'
+pool_node_long = '\x00\x13\xa2\x00A\x05p;'
 glassroom_node = '7\xc2'
-glassroom_node_long = b'\x00\x13\xa2\x00A\x05n\xdf'
-livingroom_long = b'\x00\x13\xa2\x00AO8l'
+glassroom_node_long = '\x00\x13\xa2\x00A\x05n\xdf'
+livingroom_long = '\x00\x13\xa2\x00AO8l'
 garage_node = '%\xd0'
-garage_node_long = b'\x00\x13\xa2\x00AO8\x1c'
+garage_node_long = '\x00\x13\xa2\x00AO8\x1c'
 
 #router_node = '\xfb\x8b'
 
@@ -87,8 +54,7 @@ glassroom_node_cnt = 0
 livingroom_node_cnt = 0
 garage_node_cnt = 0
 
-# the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
-SERIALPORT = "/dev/ttyS0"
+SERIALPORT = "/dev/ttyAMA0"    # the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
 BAUDRATE = 9600      # the baud rate we talk to the xbee
 
 ser = serial.Serial(SERIALPORT, BAUDRATE)
@@ -152,8 +118,7 @@ def publish(msg):
     pubnub.publish(channel, msg, callback=pub_back, error=pub_back)
 
 def message_received(data):
-    print('Xbee message received')
-    # print(data)
+    #print(data)
     global pub_msg
     global pool_temp_out
     global pool_temp_in
@@ -192,7 +157,6 @@ def message_received(data):
     garage_node_cnt += 1
     
     address = data['source_addr_long']
-    
     if address == pool_node_long:
         pool_node_cnt = 0
         pool = data
@@ -258,9 +222,6 @@ def message_received(data):
 ##        print('Glass room temp min: {:.2f}'.format(glassroom_temp_min))
 ##        print('Glass room north min: {:.2f}'.format(glassroom_north_min))
 
-    # print('Node Address: ', address)
-    # print(livingroom_long)
-
     if address == livingroom_long:
         livingroom_node_cnt = 0
         livingroom = data
@@ -302,8 +263,8 @@ def message_received(data):
         pool_node_cnt = 0
         pool_temp_out = -99.9
         pool_temp_in = -99.9
-        # pool_temp_south = -99.9
-                
+        pool_temp_south = -99.9
+        
     if glassroom_node_cnt > 20:
         glassroom_node_cnt = 0
         glassroom_temp = -99.9
@@ -318,7 +279,7 @@ def message_received(data):
         garage_temp = -99.9
         mouse_trapped = "Trip"
 
-     
+        
     #Publish to PubNub
     pub_msg = {
         'Channel': 'RpiGate',
@@ -347,7 +308,7 @@ def message_received(data):
             'garage_min': '{:.1f}'.format(garage_temp_min)
             }
     }
-  
+    
     #pubnub.publish(channel, pub_msg, callback=pub_back, error=pub_back)
     #publish(pub_msg)
 
@@ -376,20 +337,20 @@ def clear_minmax():
 # Create API object, which spawns a new thread
 xbee = ZigBee(ser, callback=message_received)
 
-# def sub_error(msg):
-#     print('Subscribe error')  
-#     print(msg)
+def sub_error(msg):
+  print('Subscribe error')  
+  print(msg)
 
-# def sub_msg(msg, channel):
-#   #print('Subscribe callback')
-#   if msg == 'connected':
-#       print('Publish data!')
-#       pubnub.publish().channel('RpiGate').message({'field': 'Your Message'}).pn_async(publish_callback)
-#     #   clear_minmax()
-#       #print(pub_msg)
+def sub_msg(msg, channel):
+  #print('Subscribe callback')
+  if msg == 'connected':
+      print('Publish data!')
+      publish(pub_msg)
+    #   clear_minmax()
+      #print(pub_msg)
   
 # Subrscribe to PubNub channel
-#pubnub.subscribe(channel, callback=sub_msg, error=sub_error)
+pubnub.subscribe(channel, callback=sub_msg, error=sub_error)
 
 print ('Starting Up ZigBee Gateway!')
 
@@ -400,8 +361,9 @@ while True:
 
         time.sleep(60)
         print('Publish data!')
-        pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
+        publish(pub_msg)
             
+    
     except KeyboardInterrupt:
         break
 
