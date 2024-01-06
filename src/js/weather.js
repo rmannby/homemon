@@ -80,16 +80,6 @@ function getWeather() {
       // console.log(weather)
       lastUpdate.innerHTML = weather.updated;
 
-      // //Today
-      // todayTemp.innerHTML = convert(weather.temp) + '&deg;C';
-      // // windChill.innerHTML = convert(weather.wind.chill) + '&deg;C';
-      // currently.innerHTML = transCode[weather.code];
-      // dayHigh.innerHTML = convert(weather.high) + '&deg';
-      // dayLow.innerHTML = convert(weather.low) + '&deg';
-      // wind.innerHTML = 'Vind ' + weather.wind.direction + ' ' + kphToMps(weather.wind.speed) + ' m/s';
-      // pressure.innerHTML = 'Bar ' + Math.round(weather.pressure) + ' mbar';
-      // document.getElementById('idImgDay').src = "images/weather/" + weather.code + ".png";
-
       //Forcast day 0 - Today
       day0.innerHTML = getDayAndDate(weather.forecast[0]);
       forecast0.innerHTML = transCode[weather.forecast[0].code];
