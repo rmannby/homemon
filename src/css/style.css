@@ -1,3 +1,11 @@
+/**
+ * Stylesheet for the homepage.
+ * 
+ * Sets up overall page layout, fonts, colors, etc.
+ * Defines styling for specific components like header, rooms, forecasts.
+ * Uses CSS grid and flexbox for layout.
+ * Has responsive breakpoints.
+ */
 * {
   border: 0;
   margin: 0;
@@ -120,7 +128,7 @@ header>img {
 }
 
 .forcast-day>p {
-  text-align: center;  
+  text-align: center;
 }
 
 @supports (display: grid) {
@@ -128,15 +136,18 @@ header>img {
     max-width: 10000px;
     margin: 0;
   }
+
   article {
     margin: 0;
   }
+
   .grid-rooms {
     display: grid;
-    grid-template-columns: repeat( 3, minmax(120px, 200px));
+    grid-template-columns: repeat(3, minmax(120px, 200px));
     justify-content: center;
     grid-gap: 1rem;
   }
+
   @media screen and (max-width: 400px) {
     .grid-rooms {
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
