@@ -93,7 +93,7 @@ function updateDOM(res) {
       console.log('PubNub channel connected')
       pubnub.publish({
         channel: channel,
-        message: 'connected'
+        message: 'Connected'
       })
     }
   })

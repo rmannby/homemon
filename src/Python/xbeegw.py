@@ -16,9 +16,15 @@ class MySubscribeCallback(SubscribeCallback):
         pass
 
     def message(self, pubnub, message):
-        print(message.message)
-        
-        
+        if message.message == 'Connected':
+            print('hello client')
+            print('Connected! Publish data')
+            pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
+
+        else:
+            print(message.message)
+
+
 
 def publish_callback(result, status):
     if not status.is_error():
