@@ -14,7 +14,7 @@ function updateWeather(cityName) {
 
 function getCoordinates(cityName) {
   const apiKey = '6419f1e7c833b35699b571a7d04401f3';
-  const geocodingUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${cityName}&limit=1&appid=${apiKey}`;
+  const geocodingUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${cityName}&limit=1&appid=${apiKey}`;
 
   fetch(geocodingUrl)
     .then(response => response.json())
