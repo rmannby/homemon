@@ -175,6 +175,10 @@ header>img {
       height: 32px;
       width: 32px;
     }
+    .electricity-prices {
+      grid-column: span 2;
+      grid-row: auto;
+    }
   }
 }
 
