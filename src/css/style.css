@@ -93,6 +93,16 @@ header>img {
   align-self: center;
 }
 
+.electricity-prices {
+  grid-column: span 3;
+  grid-row: auto;
+}
+
+#priceChart {
+  height: 300px; /* Ändra värdet till önskad höjd */
+}
+
+
 .forcast {
   grid-column: 1 / -1;
   display: flex;
@@ -167,3 +177,4 @@ header>img {
     }
   }
 }
+

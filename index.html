@@ -63,20 +63,28 @@
     </article>
 
     <!-- Pool heat -->
+    <!--
     <article class="room" id="poolHeat">
       <h2>POOLVÄRME</h2>
       <div class="temp-display" id="poolHeatTemp">--.-°C</div>
       <img src="src/images/sun.png" alt="Pool heat">
     </article>
-
-    <!-- Garage -->
-    <article class="room" id="garage">
-      <h2>GARAGE</h2>
-      <div class="temp-display" id="garageTemp">--.-°C</div>
-      <img src="src/images/temperatureInside.png" alt="Inside house">
-    </article>
-
-    <!-- Weather forecast starts here -->
+  -->
+  
+  <!-- Garage -->
+  <article class="room" id="garage">
+    <h2>GARAGE</h2>
+    <div class="temp-display" id="garageTemp">--.-°C</div>
+    <img src="src/images/temperatureInside.png" alt="Inside house">
+  </article>
+  
+  <!-- Add this before the forecast article -->
+  <article class="electricity-prices">
+    <h2>ELPRISER</h2>
+    <canvas id="priceChart" width="100%" height="200"></canvas>
+  </article>
+  
+  <!-- Weather forecast starts here -->
     <article class="forcast">
       <section class="forcast-day">
         <h2 id="day0">Day 0</h2>
@@ -119,7 +127,13 @@
   <script type="text/javascript" src="src/js/weathermap.js"></script>
   <!-- <script type="text/javascript" src="src/js/weather.js"></script> -->
   <script type="text/javascript" src="src/js/pubnub-gateway.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="src/js/spot_price_chart.js"></script>
+
+
 
 </body>
  
 </html>
+
+
