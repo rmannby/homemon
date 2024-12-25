@@ -49,7 +49,8 @@ const renderChart = (labels, data) => {
     const ctx = canvas.getContext('2d');
 
     // Adjust parent container styles for spanning three columns
-    document.querySelector('.electricity-prices').style.gridColumn = "span 3";
+    document.querySelector('.electricity-prices');
+//    document.querySelector('.electricity-prices').style.gridColumn = "span 3";
 
     new Chart(ctx, {
         type: 'line',
