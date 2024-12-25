@@ -58,11 +58,11 @@ function updateDOM(res) {
     poolTemp.innerHTML = (res["Pool"] + "°C");
   }
 
-  if (res["Poolheat"] === "-99.9") {
-    poolHeatTemp.innerHTML = ("--.-°C");
-  } else if (res["Poolheat"]) {
-    poolHeatTemp.innerHTML = (res["Poolheat"] + "°C");
-  }
+  // if (res["Poolheat"] === "-99.9") {
+  //   poolHeatTemp.innerHTML = ("--.-°C");
+  // } else if (res["Poolheat"]) {
+  //   poolHeatTemp.innerHTML = (res["Poolheat"] + "°C");
+  // }
 
   // Show/hide mouse direction
   // console.log(res["Mouse trapped"]);
@@ -139,9 +139,9 @@ showMinMax_pool.addEventListener('click', () => {
   alert(`POOL \nMax: ${minMax.pool_max}°C \nMin: ${minMax.pool_min}°C`)
 })
 
-showMinMax_poolHeat.addEventListener('click', () => {
-  alert(`POOLVÄRME \nMax: ${minMax.pool_heat_max}°C \nMin: ${minMax.pool_heat_min}°C`)
-})
+// showMinMax_poolHeat.addEventListener('click', () => {
+//   alert(`POOLVÄRME \nMax: ${minMax.pool_heat_max}°C \nMin: ${minMax.pool_heat_min}°C`)
+// })
 
 showMinMax_garage.addEventListener('click', () => {
   alert(`GARAGE \nMax: ${minMax.garage_max}°C \nMin: ${minMax.garage_min}°C`)

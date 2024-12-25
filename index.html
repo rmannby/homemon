@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="src/css/style.css">
   <link rel="shortcut icon" type="image/png" href="src/images/homemon-144x144.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="HomeMon">
   <link rel="apple-touch-icon" href="src/images/homemon-144x144.png" sizes="144x144">
@@ -78,11 +78,18 @@
     <img src="src/images/temperatureInside.png" alt="Inside house">
   </article>
   
-  <!-- Add this before the forecast article -->
+  <!-- electricity-prices -->
   <article class="electricity-prices">
     <h2>ELPRISER</h2>
     <canvas id="priceChart" width="100%" height="200"></canvas>
+    <!-- Add the statistics container -->
+    <div id="priceStats" style="display: flex; justify-content: space-between; margin-top: 1em;">
+      <p><strong>Genomsnitt:</strong> -- SEK/kWh</p>
+      <p><strong>Högsta pris:</strong> -- SEK/kWh</p>
+      <p><strong>Lägsta pris:</strong> -- SEK/kWh</p>
+    </div>
   </article>
+  
   
   <!-- Weather forecast starts here -->
     <article class="forcast">

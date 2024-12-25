@@ -24,17 +24,14 @@ const fetchElectricityPrices = async () => {
         const maxPrice = Math.max(...prices).toFixed(2);
         const minPrice = Math.min(...prices).toFixed(2);
 
-        // Display statistics in a horizontal layout
-        const statsContainer = document.querySelector('.electricity-prices');
-        const statsElement = document.createElement('div');
-        statsElement.innerHTML = `
-            <div style="display: flex; justify-content: space-between; margin-top: 1em;">
-                <p><strong>Genomsnitt:</strong> ${averagePrice} SEK/kWh</p>
-                <p><strong>Högsta pris:</strong> ${maxPrice} SEK/kWh</p>
-                <p><strong>Lägsta pris:</strong> ${minPrice} SEK/kWh</p>
-            </div>
-        `;
-        statsContainer.appendChild(statsElement);
+        // Display statistics in the predefined layout
+        const statsElement = document.getElementById('priceStats');
+        const [avgElement, maxElement, minElement] = statsElement.querySelectorAll('p');
+
+        avgElement.innerHTML = `Genomsnitt: ${averagePrice} SEK/kWh`;
+        maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
+        minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
+
 
         renderChart(labels, prices);
     } catch (error) {
