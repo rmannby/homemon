@@ -48,7 +48,8 @@ const renderChart = (labels, data) => {
 
     // Destroy existing chart instance if it exists
     if (chartInstance) {
-        console.log('Destroying existing chart instance.');
+        const now = new Date();
+        console.log(`[${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}] Destroying existing chart instance.`);
         chartInstance.destroy();
     }
 
@@ -56,7 +57,7 @@ const renderChart = (labels, data) => {
     const now = new Date();
     const currentHour = `${now.getHours()}:00`;
 
-    console.log('Re-rendering chart with updated data.');
+    console.log(`[${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}] Re-rendering chart with updated data.`);
 
     chartInstance = new Chart(ctx, {
         type: 'line',
@@ -107,5 +108,5 @@ window.addEventListener('DOMContentLoaded', () => {
     fetchElectricityPrices();
     setInterval(() => {
         fetchElectricityPrices();
-    }, 60 * 5 * 1000); // Uppdatera var 5 minut 
+    }, 5 * 60 * 1000); // Uppdatera var femte minut
 });
