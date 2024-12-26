@@ -88,22 +88,22 @@ self.addEventListener('fetch', function (event) {
 });
 
 
-self.addEventListener('updatefound', function() {
-    console.log('[Service Worker] Update found! Installing new version...');
-    const newWorker = self.registration.installing;
+// self.addEventListener('updatefound', function() {
+//     console.log('[Service Worker] Update found! Installing new version...');
+//     const newWorker = self.registration.installing;
     
-    newWorker.addEventListener('statechange', () => {
-        console.log('[Service Worker] New worker state:', newWorker.state);
-        switch (newWorker.state) {
-            case 'installed':
-                console.log('[Service Worker] New version installed successfully');
-                break;
-            case 'activated':
-                console.log('[Service Worker] New version activated and running');
-                break;
-            case 'redundant':
-                console.log('[Service Worker] New version installation failed');
-                break;
-        }
-    });
-});
+//     newWorker.addEventListener('statechange', () => {
+//         console.log('[Service Worker] New worker state:', newWorker.state);
+//         switch (newWorker.state) {
+//             case 'installed':
+//                 console.log('[Service Worker] New version installed successfully');
+//                 break;
+//             case 'activated':
+//                 console.log('[Service Worker] New version activated and running');
+//                 break;
+//             case 'redundant':
+//                 console.log('[Service Worker] New version installation failed');
+//                 break;
+//         }
+//     });
+// });

@@ -12,6 +12,8 @@ if ('serviceWorker' in navigator) {
 // Check for service worker updates every hour
 setInterval(() => {
   navigator.serviceWorker.getRegistration().then(registration => {
+    console.log('Checking for service worker updates...');
+    
     registration.update();
   });
 }, 3600000); // 1 hour in milliseconds
