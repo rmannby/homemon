@@ -1,4 +1,6 @@
 // JavaScript code to fetch electricity prices and render them in a chart
+let chartInstance = null;
+
 const fetchElectricityPrices = async () => {
     try {
         // Dynamically construct the API URL based on today's date and price class (SE3)
@@ -32,7 +34,6 @@ const fetchElectricityPrices = async () => {
         maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
         minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 
-
         renderChart(labels, prices);
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
@@ -45,11 +46,19 @@ const renderChart = (labels, data) => {
 
     const ctx = canvas.getContext('2d');
 
-    // Adjust parent container styles for spanning three columns
-    document.querySelector('.electricity-prices');
-//    document.querySelector('.electricity-prices').style.gridColumn = "span 3";
+    // Destroy existing chart instance if it exists
+    if (chartInstance) {
+        console.log('Destroying existing chart instance.');
+        chartInstance.destroy();
+    }
 
-    new Chart(ctx, {
+    // Determine the current hour
+    const now = new Date();
+    const currentHour = `${now.getHours()}:00`;
+
+    console.log('Re-rendering chart with updated data.');
+
+    chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -59,6 +68,8 @@ const renderChart = (labels, data) => {
                 borderColor: 'rgba(2, 169, 231, 1)',
                 backgroundColor: 'rgba(2, 169, 231, 0.2)',
                 fill: true,
+                pointBackgroundColor: labels.map(label => label === currentHour ? 'red' : 'rgba(2, 169, 231, 1)'),
+                pointRadius: labels.map(label => label === currentHour ? 6 : 3), // Larger point for current hour
             }]
         },
         options: {
@@ -94,5 +105,7 @@ const renderChart = (labels, data) => {
 // Fetch and render electricity prices on page load
 window.addEventListener('DOMContentLoaded', () => {
     fetchElectricityPrices();
-    setInterval(fetchElectricityPrices, 60 * 60 * 1000); // Uppdatera varje timme
+    setInterval(() => {
+        fetchElectricityPrices();
+    }, 60 * 1 * 1000); // Uppdatera varje timme
 });
