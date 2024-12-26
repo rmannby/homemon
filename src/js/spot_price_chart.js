@@ -107,5 +107,5 @@ window.addEventListener('DOMContentLoaded', () => {
     fetchElectricityPrices();
     setInterval(() => {
         fetchElectricityPrices();
-    }, 60 * 1 * 1000); // Uppdatera varje timme
+    }, 60 * 5 * 1000); // Uppdatera var 5 minut 
 });
