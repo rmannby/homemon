@@ -98,8 +98,6 @@ BAUDRATE = 9600      # the baud rate we talk to the xbee
 
 ser = serial.Serial(SERIALPORT, BAUDRATE)
 
-#xbee = ZigBee(ser)
-
 #temp1 = (adc-x * 0.001216 - 0.5) * 100;
 #get the current temp from a list of voltage readings
 def get_temperature(data, cal = 0.0, channel="adc-0", format="C"):
@@ -257,14 +255,6 @@ def message_received(data):
         print('Glass room temp: {:.2f}'.format(glassroom_temp))
         print('Glass room north: {:.2f}'.format(glassroom_north))
 
-##        print('Glass room temp max: {:.2f}'.format(glassroom_temp_max))
-##        print('Glass room north max: {:.2f}'.format(glassroom_north_max))
-##
-##        print('Glass room temp min: {:.2f}'.format(glassroom_temp_min))
-##        print('Glass room north min: {:.2f}'.format(glassroom_north_min))
-
-    # print('Node Address: ', address)
-    # print(livingroom_long)
 
     if address == livingroom_long:
         livingroom_node_cnt = 0
@@ -279,9 +269,6 @@ def message_received(data):
         
         print('livingroom temp: {:.2f}'.format(indoor_temp))
 
-##        print('livingroom temp max: {:.2f}'.format(indoor_temp_max))
-##        print('livingroom temp min: {:.2f}'.format(indoor_temp_min))
-
     if address == garage_node_long:
         garage_node_cnt = 0
         garage = data
@@ -295,9 +282,6 @@ def message_received(data):
             garage_temp_min = garage_temp
             
         print('Garage temp: {:.2f}'.format(garage_temp))
-
-##        print('Garage temp max: {:.2f}'.format(garage_temp_max))
-##        print('Garage temp min: {:.2f}'.format(garage_temp_max))
 
         s = 'The trap is: ' + mouse_trapped
         print(s)
@@ -353,10 +337,9 @@ def message_received(data):
             }
     }
   
-    #pubnub.publish(channel, pub_msg, callback=pub_back, error=pub_back)
-    #publish(pub_msg)
 
 def clear_minmax():
+    # This function resets the min and max temperature values to the current readings
     print('minmax clear')
     pool_temp_out_max = pool_temp_out          
     pool_temp_out_min = pool_temp_out
@@ -380,21 +363,6 @@ def clear_minmax():
 
 # Create API object, which spawns a new thread
 xbee = ZigBee(ser, callback=message_received)
-
-# def sub_error(msg):
-#     print('Subscribe error')  
-#     print(msg)
-
-# def sub_msg(msg, channel):
-#   #print('Subscribe callback')
-#   if msg == 'connected':
-#       print('Publish data!')
-#       pubnub.publish().channel('RpiGate').message({'field': 'Your Message'}).pn_async(publish_callback)
-#     #   clear_minmax()
-#       #print(pub_msg)
-  
-# Subrscribe to PubNub channel
-#pubnub.subscribe(channel, callback=sub_msg, error=sub_error)
 
 print ('Starting Up ZigBee Gateway!')
 
