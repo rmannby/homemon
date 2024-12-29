@@ -3,6 +3,8 @@ from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
 from pubnub.callbacks import SubscribeCallback
 from xbee import ZigBee
+import subprocess
+import json
 
 #pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
 
@@ -92,6 +94,74 @@ glassroom_node_cnt = 0
 livingroom_node_cnt = 0
 garage_node_cnt = 0
 
+def fetch_data_from_device(device_ip):
+    try:
+        # Use curl to fetch data from the /api/v1/data endpoint
+        result = subprocess.run(
+            ["curl", f"http://{device_ip}/api/v1/data"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            print("Error executing curl:", result.stderr)
+            return None
+
+        # Parse the JSON response
+        json_data = json.loads(result.stdout)
+        return json_data
+
+    except json.JSONDecodeError:
+        print("Failed to parse JSON response.")
+    except subprocess.TimeoutExpired:
+        print("Request timed out.")
+    except Exception as e:
+        print("An unexpected error occurred:", e)
+
+    return None
+
+def process_homewizard_data(device_ip):
+    data = fetch_data_from_device(device_ip)
+    if data:
+        try:
+            processed_data = {
+                'power_usage': {
+                    'current_usage_w': data['active_power_w'],
+                    'import_kwh': data['total_power_import_kwh'],
+                    'export_kwh': data['total_power_export_kwh']
+                },
+                'per_phase': {
+                    'L1': {
+                        'power_w': data['active_power_l1_w'],
+                        'voltage_v': data['active_voltage_l1_v'],
+                        'current_a': data['active_current_l1_a']
+                    },
+                    'L2': {
+                        'power_w': data['active_power_l2_w'],
+                        'voltage_v': data['active_voltage_l2_v'],
+                        'current_a': data['active_current_l2_a']
+                    },
+                    'L3': {
+                        'power_w': data['active_power_l3_w'],
+                        'voltage_v': data['active_voltage_l3_v'],
+                        'current_a': data['active_current_l3_a']
+                    }
+                },
+                'wifi': {
+                    'ssid': data['wifi_ssid'],
+                    'strength': data['wifi_strength']
+                }
+            }
+            print("Processed Homewizard data successfully")
+            return processed_data
+        except KeyError as e:
+            print(f"Missing expected field in Homewizard data: {e}")
+            return None
+    else:
+        print("Failed to fetch Homewizard data")
+        return None
+    
 # the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
 SERIALPORT = "/dev/ttyS0"
 BAUDRATE = 9600      # the baud rate we talk to the xbee
@@ -376,7 +446,12 @@ while True:
             # Check for messages or other tasks here if needed
         print('Publish data!')
         pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
-            
+        homewizard_data = process_homewizard_data("192.168.87.153")
+        if homewizard_data:
+            print("Power usage:", homewizard_data['power_usage']['current_usage_w'], "W")
+            print("Import:", homewizard_data['power_usage']['import_kwh'], "kWh")
+            print("Export:", homewizard_data['power_usage']['export_kwh'], "kWh")
+                                    
     except KeyboardInterrupt:
         break
 
