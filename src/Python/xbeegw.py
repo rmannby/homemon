@@ -1,9 +1,7 @@
-import time
-from pubnub.pubnub import PubNub
+import serial, time, datetime, sys
 from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
 from pubnub.callbacks import SubscribeCallback
-#from pubnub.pubnub import Pubnub
 from xbee import ZigBee
 
 #pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
@@ -17,10 +15,9 @@ class MySubscribeCallback(SubscribeCallback):
         pass
 
     def message(self, pubnub, message):
-        global pub_msg
         if message.message == 'Connected':
             print('hello client')
-            pubnub.publish().channel('RpiGate').message(pub_msg).future().add_done_callback(publish_callback)
+            print('Connected! Publish data')
             pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
 
         else:
@@ -106,15 +103,13 @@ ser = serial.Serial(SERIALPORT, BAUDRATE)
 #temp1 = (adc-x * 0.001216 - 0.5) * 100;
 #get the current temp from a list of voltage readings
 def get_temperature(data, cal = 0.0, channel="adc-0", format="C"):
-    adc = None
     #iterate over data elements
     #readings = []
     for item in data:
         #readings.append(item.get('adc-0'))
         adc = item.get(channel)
 
-    if adc is None:
-        continue
+    #start by averaging the data
     #adc = sum(readings)/float(len(readings))
     
     #now calculate the proper mv
@@ -133,11 +128,8 @@ def get_battery(data, channel="adc-2"):
     #iterate over data elements
     for item in data:
         adc = item.get(channel)
-    #bat = ((xbeeMsg.b1_hi * 256 + xbeeMsg.b1_lo) * 0.0476 - 5.5935) / 10;    
-    if adc is not None:
-        battery = adc
-    else:
-        battery = 0  # or any default value you prefer
+
+    #now calculate the proper mv
     #bat = ((xbeeMsg.b1_hi * 256 + xbeeMsg.b1_lo) * 0.0476 - 5.5935) / 10;    
     battery = adc    
 
@@ -146,9 +138,7 @@ def get_battery(data, channel="adc-2"):
 #get mouse trapped or not
 def get_mouse_trapped(data, channel="dio-1"):
     #iterate over data elements
-    if dio is None:
-        trapped = "Unknown"
-    elif dio == False:
+    for item in data:
         dio = item.get(channel)
         
     if dio == False:
@@ -164,8 +154,8 @@ def pub_back(m):
   print(m)
 
 def publish(msg):
-    pubnub.publish().channel(channel).message(msg).pn_async(pub_back)
     pubnub.publish(channel, msg, callback=pub_back, error=pub_back)
+
 def message_received(data):
     print('Xbee message received')
     # print(data)
@@ -336,7 +326,6 @@ def message_received(data):
      
     #Publish to PubNub
     pub_msg = {
-        'channel': 'RpiGate',
         'Channel': 'RpiGate',
         'indoor': '{:.1f}'.format(indoor_temp),
         'Outdoor north': '{:.1f}'.format(glassroom_north),
@@ -366,7 +355,7 @@ def message_received(data):
   
     #pubnub.publish(channel, pub_msg, callback=pub_back, error=pub_back)
     #publish(pub_msg)
-    #publish('RpiGate', pub_msg)
+
 def clear_minmax():
     print('minmax clear')
     pool_temp_out_max = pool_temp_out          
@@ -414,7 +403,9 @@ print ('Starting Up ZigBee Gateway!')
 while True:
     try:
 
-        time.sleep(60)
+        for _ in range(60):
+            time.sleep(1)
+            # Check for messages or other tasks here if needed
         print('Publish data!')
         pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
             
