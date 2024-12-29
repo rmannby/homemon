@@ -1,4 +1,5 @@
-import serial, time, datetime, sys
+import time
+from pubnub.pubnub import PubNub
 from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
 from pubnub.callbacks import SubscribeCallback
@@ -16,9 +17,10 @@ class MySubscribeCallback(SubscribeCallback):
         pass
 
     def message(self, pubnub, message):
+        global pub_msg
         if message.message == 'Connected':
             print('hello client')
-            print('Connected! Publish data')
+            pubnub.publish().channel('RpiGate').message(pub_msg).future().add_done_callback(publish_callback)
             pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
 
         else:
@@ -103,25 +105,27 @@ ser = serial.Serial(SERIALPORT, BAUDRATE)
 
 #temp1 = (adc-x * 0.001216 - 0.5) * 100;
 #get the current temp from a list of voltage readings
-def get_tempature(data, cal = 0.0, channel="adc-0", format="C"):
+def get_temperature(data, cal = 0.0, channel="adc-0", format="C"):
+    adc = None
     #iterate over data elements
     #readings = []
     for item in data:
         #readings.append(item.get('adc-0'))
         adc = item.get(channel)
 
-    #start by averaging the data
+    if adc is None:
+        continue
     #adc = sum(readings)/float(len(readings))
     
     #now calculate the proper mv
     #we are using a 3.3v usb explorer so the formula is slightly different
-    tempature = (((adc * 0.001216) - 0.5) * 100) - cal    
+    temperature = (((adc * 0.001216) - 0.5) * 100) - cal    
 
     if format=="F":
         #convert to farenheit
-        tempature = (tempature * 1.8) + 32
+        temperature = (temperature * 1.8) + 32
 
-    return tempature
+    return temperature
 
 
 #get the current battery voltage readings
@@ -129,8 +133,11 @@ def get_battery(data, channel="adc-2"):
     #iterate over data elements
     for item in data:
         adc = item.get(channel)
-
-    #now calculate the proper mv
+    #bat = ((xbeeMsg.b1_hi * 256 + xbeeMsg.b1_lo) * 0.0476 - 5.5935) / 10;    
+    if adc is not None:
+        battery = adc
+    else:
+        battery = 0  # or any default value you prefer
     #bat = ((xbeeMsg.b1_hi * 256 + xbeeMsg.b1_lo) * 0.0476 - 5.5935) / 10;    
     battery = adc    
 
@@ -139,7 +146,9 @@ def get_battery(data, channel="adc-2"):
 #get mouse trapped or not
 def get_mouse_trapped(data, channel="dio-1"):
     #iterate over data elements
-    for item in data:
+    if dio is None:
+        trapped = "Unknown"
+    elif dio == False:
         dio = item.get(channel)
         
     if dio == False:
@@ -155,8 +164,8 @@ def pub_back(m):
   print(m)
 
 def publish(msg):
+    pubnub.publish().channel(channel).message(msg).pn_async(pub_back)
     pubnub.publish(channel, msg, callback=pub_back, error=pub_back)
-
 def message_received(data):
     print('Xbee message received')
     # print(data)
@@ -202,9 +211,9 @@ def message_received(data):
     if address == pool_node_long:
         pool_node_cnt = 0
         pool = data
-        pool_temp_out = get_tempature(pool['samples'], 1.92, "adc-0", format="C")
-        pool_temp_in = get_tempature(pool['samples'], 1.8, "adc-1", format="C")
-        pool_temp_south = get_tempature(pool['samples'], 2.0, "adc-2", format="C")
+        pool_temp_out = get_temperature(pool['samples'], 1.92, "adc-0", format="C")
+        pool_temp_in = get_temperature(pool['samples'], 1.8, "adc-1", format="C")
+        pool_temp_south = get_temperature(pool['samples'], 2.0, "adc-2", format="C")
 
         #MinMax
         if pool_temp_out > pool_temp_out_max:
@@ -240,8 +249,8 @@ def message_received(data):
     if address == glassroom_node_long:
         glassroom_node_cnt = 0
         glassroom = data
-        glassroom_temp = get_tempature(glassroom['samples'], 2.0, "adc-0", format="C")
-        glassroom_north = get_tempature(glassroom['samples'], 2.0, "adc-1", format="C")
+        glassroom_temp = get_temperature(glassroom['samples'], 2.0, "adc-0", format="C")
+        glassroom_north = get_temperature(glassroom['samples'], 2.0, "adc-1", format="C")
 
         if glassroom_temp > glassroom_temp_max:
             glassroom_temp_max = glassroom_temp
@@ -270,7 +279,7 @@ def message_received(data):
     if address == livingroom_long:
         livingroom_node_cnt = 0
         livingroom = data
-        indoor_temp = get_tempature(livingroom['samples'], 2.0, "adc-0", format="C")
+        indoor_temp = get_temperature(livingroom['samples'], 2.0, "adc-0", format="C")
 
         if indoor_temp > indoor_temp_max:
             indoor_temp_max = indoor_temp
@@ -286,7 +295,7 @@ def message_received(data):
     if address == garage_node_long:
         garage_node_cnt = 0
         garage = data
-        garage_temp = get_tempature(garage['samples'], 2.0, "adc-0", format="C")
+        garage_temp = get_temperature(garage['samples'], 2.0, "adc-0", format="C")
         mouse_trapped = get_mouse_trapped(garage['samples'], "dio-1")
 
         if garage_temp > garage_temp_max:
@@ -327,6 +336,7 @@ def message_received(data):
      
     #Publish to PubNub
     pub_msg = {
+        'channel': 'RpiGate',
         'Channel': 'RpiGate',
         'indoor': '{:.1f}'.format(indoor_temp),
         'Outdoor north': '{:.1f}'.format(glassroom_north),
@@ -356,7 +366,7 @@ def message_received(data):
   
     #pubnub.publish(channel, pub_msg, callback=pub_back, error=pub_back)
     #publish(pub_msg)
-
+    #publish('RpiGate', pub_msg)
 def clear_minmax():
     print('minmax clear')
     pool_temp_out_max = pool_temp_out          
