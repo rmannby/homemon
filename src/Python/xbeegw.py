@@ -3,11 +3,57 @@ from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
 from pubnub.callbacks import SubscribeCallback
 from xbee import ZigBee
+from influxdb import InfluxDBClient
 import subprocess
 import json
 
 #pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
 
+# InfluxDB configuration
+INFLUX_HOST = 'localhost'
+INFLUX_PORT = 8086
+INFLUX_DATABASE = 'energy_monitoring'
+
+# Initialize InfluxDB client
+influx_client = InfluxDBClient(
+    host=INFLUX_HOST,
+    port=INFLUX_PORT,
+    database=INFLUX_DATABASE
+)
+
+def store_energy_data(data):
+    """
+    Store HomeWizard energy data in InfluxDB
+    """
+    try:
+        json_body = [
+            {
+                "measurement": "energy_usage",
+                "tags": {
+                    "source": "homewizard"
+                },
+                "fields": {
+                    "power_usage_w": float(data['power_usage']['current_usage_w']),
+                    "import_kwh": float(data['power_usage']['import_kwh']),
+                    "export_kwh": float(data['power_usage']['export_kwh']),
+                    "l1_power": float(data['per_phase']['L1']['power_w']),
+                    "l1_voltage": float(data['per_phase']['L1']['voltage_v']),
+                    "l1_current": float(data['per_phase']['L1']['current_a']),
+                    "l2_power": float(data['per_phase']['L2']['power_w']),
+                    "l2_voltage": float(data['per_phase']['L2']['voltage_v']),
+                    "l2_current": float(data['per_phase']['L2']['current_a']),
+                    "l3_power": float(data['per_phase']['L3']['power_w']),
+                    "l3_voltage": float(data['per_phase']['L3']['voltage_v']),
+                    "l3_current": float(data['per_phase']['L3']['current_a'])
+                }
+            }
+        ]
+        
+        influx_client.write_points(json_body)
+        print("Data stored in InfluxDB successfully")
+        
+    except Exception as e:
+        print(f"Error storing data in InfluxDB: {e}")
 
 class MySubscribeCallback(SubscribeCallback):
     def status(self, pubnub, status):
@@ -451,6 +497,9 @@ while True:
             print("Power usage:", homewizard_data['power_usage']['current_usage_w'], "W")
             print("Import:", homewizard_data['power_usage']['import_kwh'], "kWh")
             print("Export:", homewizard_data['power_usage']['export_kwh'], "kWh")
+            
+            # Add this line to store data in InfluxDB
+            store_energy_data(homewizard_data)
                                     
     except KeyboardInterrupt:
         break
