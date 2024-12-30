@@ -55,6 +55,36 @@ def store_energy_data(data):
     except Exception as e:
         print(f"Error storing data in InfluxDB: {e}")
 
+def store_sensor_data(data):
+    """
+    Store sensor data from pub_msg in InfluxDB
+    """
+    try:
+        json_body = [
+            {
+                "measurement": "temperature_sensors",
+                "tags": {
+                    "source": "zigbee_gateway"
+                },
+                "fields": {
+                    "indoor_temp": float(data['indoor']),
+                    "outdoor_north_temp": float(data['Outdoor north']),
+                    "outdoor_south_temp": float(data['Outdoor south']),
+                    "glassroom_temp": float(data['Glassroom']),
+                    "pool_temp": float(data['Pool']),
+                    "pool_heat_temp": float(data['Poolheat']),
+                    "garage_temp": float(data['Garage']),
+                    "mouse_trap_status": data['Mouse trapped']
+                }
+            }
+        ]
+        
+        influx_client.write_points(json_body)
+        print("Sensor data stored in InfluxDB successfully")
+        
+    except Exception as e:
+        print(f"Error storing sensor data in InfluxDB: {e}")
+
 class MySubscribeCallback(SubscribeCallback):
     def status(self, pubnub, status):
         pass
@@ -486,19 +516,21 @@ print ('Starting Up ZigBee Gateway!')
 # Continuously read and print packets
 while True:
     try:
-
         for _ in range(60):
             time.sleep(1)
             # Check for messages or other tasks here if needed
+        
         print('Publish data!')
+        # Publish and store sensor data
         pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
+        store_sensor_data(pub_msg)  # Store sensor data right after publishing it
+        
+        # Process and store HomeWizard data separately
         homewizard_data = process_homewizard_data("192.168.87.153")
         if homewizard_data:
             print("Power usage:", homewizard_data['power_usage']['current_usage_w'], "W")
             print("Import:", homewizard_data['power_usage']['import_kwh'], "kWh")
             print("Export:", homewizard_data['power_usage']['export_kwh'], "kWh")
-            
-            # Add this line to store data in InfluxDB
             store_energy_data(homewizard_data)
                                     
     except KeyboardInterrupt:
