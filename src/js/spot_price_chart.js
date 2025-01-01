@@ -3,7 +3,6 @@ let chartInstance = null;
 
 const fetchElectricityPrices = async () => {
     try {
-        // Dynamically construct the API URL based on today's date and price class (SE3)
         const today = new Date();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -19,14 +18,13 @@ const fetchElectricityPrices = async () => {
             return `${date.getHours()}:00`;
         });
 
-        const prices = data.map(entry => entry.SEK_per_kWh);
+        // Vattenfall's price formula: (spot price × 1.25) + (13.53/100)
+        const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53/100).toFixed(2));
 
-        // Calculate statistics
-        const averagePrice = (prices.reduce((sum, price) => sum + price, 0) / prices.length).toFixed(2);
-        const maxPrice = Math.max(...prices).toFixed(2);
-        const minPrice = Math.min(...prices).toFixed(2);
+        const averagePrice = (prices.reduce((sum, price) => sum + Number(price), 0) / prices.length).toFixed(2);
+        const maxPrice = Math.max(...prices.map(Number)).toFixed(2);
+        const minPrice = Math.min(...prices.map(Number)).toFixed(2);
 
-        // Display statistics in the predefined layout
         const statsElement = document.getElementById('priceStats');
         const [avgElement, maxElement, minElement] = statsElement.querySelectorAll('p');
 
@@ -39,7 +37,6 @@ const fetchElectricityPrices = async () => {
         console.error('Error fetching electricity prices:', error);
     }
 };
-
 const renderChart = (labels, data) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75; // Sätt önskad höjd i pixlar
@@ -64,7 +61,7 @@ const renderChart = (labels, data) => {
         data: {
             labels: labels,
             datasets: [{
-                label: 'El-spotpris (SEK/kWh)',
+                label: 'Vattenfall-timpris (SEK/kWh)',
                 data: data,
                 borderColor: 'rgba(2, 169, 231, 1)',
                 backgroundColor: 'rgba(2, 169, 231, 0.2)',
