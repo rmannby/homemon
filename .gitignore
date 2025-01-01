@@ -1,3 +1,13 @@
 /node_modules/*
+# Ignore configuration file with real credentials
+config.ini
 
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore environment-specific files
+.env
+.venv/
+venv/
 
