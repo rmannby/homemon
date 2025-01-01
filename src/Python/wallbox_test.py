@@ -71,7 +71,7 @@ def main():
     # Rest of your code...
     for chargerId in w.getChargersList():
         # Example: Set max current to 10A
-        set_max_current(w, chargerId, 10)
+        #set_max_current(w, chargerId, 10)
         
          # Get and print session information
         endDate = datetime.datetime.now()
