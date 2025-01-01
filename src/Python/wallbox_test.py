@@ -17,16 +17,43 @@ def load_config():
     config.read(config_path)
     return config
 
-# w = Wallbox("roger.mannby@icloud.com", "clear")
-
-# # Authenticate with the credentials above
-# w.authenticate()
-
-# # Print a list of chargers in the account
-# print(w.getChargersList())
-
 def format_timestamp(timestamp):
     return dt.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+def set_max_current(wallbox, charger_id, max_amps):
+    """
+    Set the maximum charging current for a specific charger
+    
+    Args:
+        wallbox: Wallbox instance
+        charger_id: ID of the charger to modify
+        max_amps: Maximum current in Amperes (typically between 6 and 32)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get current status to verify the change
+        initial_status = wallbox.getChargerStatus(charger_id)
+        
+        # Set the max charging current
+        wallbox.setMaxChargingCurrent(charger_id, max_amps)
+        
+        # Wait a moment for the change to take effect
+        time.sleep(2)
+        
+        # Verify the change
+        new_status = wallbox.getChargerStatus(charger_id)
+        
+        # Print confirmation
+        print(f"Changed max current for charger {charger_id}")
+        print(f"Previous max current: {initial_status['config_data']['max_charging_current']}A")
+        print(f"New max current: {new_status['config_data']['max_charging_current']}A")
+        
+        return True
+    except Exception as e:
+        print(f"Error setting max current: {str(e)}")
+        return False
 
 def main():
     # Load configuration
@@ -43,6 +70,10 @@ def main():
     
     # Rest of your code...
     for chargerId in w.getChargersList():
+        # Example: Set max current to 10A
+        set_max_current(w, chargerId, 10)
+        
+         # Get and print session information
         endDate = datetime.datetime.now()
         startDate = endDate - datetime.timedelta(days=60)
         sessionList = w.getSessionList(chargerId, startDate, endDate)
