@@ -6,6 +6,8 @@ from xbee import ZigBee
 from influxdb import InfluxDBClient
 import subprocess
 import json
+from electricity_prices import get_electricity_prices
+from datetime import datetime, timedelta
 
 #pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
 
@@ -20,6 +22,37 @@ influx_client = InfluxDBClient(
     port=INFLUX_PORT,
     database=INFLUX_DATABASE
 )
+
+# Variables to store the last time electricity prices were fetched and the default price region.
+# `last_price_fetch` is used to track when the prices were last fetched, to avoid fetching them too frequently.
+# `price_region` is the default price region to use when fetching electricity prices.
+last_price_fetch = None
+price_region = "SE3"  # Your default price region
+
+def fetch_and_store_prices():
+    """
+    Fetch electricity prices and store them in InfluxDB using line protocol
+    Returns True if successful, False otherwise
+    """
+    try:
+        # Get prices for today
+        lines = get_electricity_prices(price_region=price_region)
+        if not lines:
+            print("No price data received")
+            return False
+            
+        # Write directly to InfluxDB using line protocol
+        success = influx_client.write(lines, {'db': INFLUX_DATABASE}, protocol='line')
+        if success:
+            print("Electricity prices stored successfully")
+            return True
+        else:
+            print("Failed to store electricity prices")
+            return False
+            
+    except Exception as e:
+        print(f"Error fetching/storing electricity prices: {e}")
+        return False
 
 def store_energy_data(data):
     """
@@ -512,20 +545,38 @@ xbee = ZigBee(ser, callback=message_received)
 
 print ('Starting Up ZigBee Gateway!')
 
-
+# Initial fetch of electricity prices
+print('Fetching initial electricity prices')
+if fetch_and_store_prices():
+    last_price_fetch = datetime.now()
+else:
+    print("Initial price fetch failed, will retry at next scheduled time")
+    
 # Continuously read and print packets
 while True:
     try:
+        current_time = datetime.now()
+        
+        # Check if we need to fetch prices (do it early in the morning, e.g., at 1 AM)
+        if (last_price_fetch is None or 
+            current_time.date() > last_price_fetch.date()) and \
+            current_time.hour == 1:
+            
+            print("Fetching electricity prices for today")
+            if fetch_and_store_prices():
+                last_price_fetch = current_time
+        
+        # Your existing 60-second loop
         for _ in range(60):
             time.sleep(1)
             # Check for messages or other tasks here if needed
         
         print('Publish data!')
-        # Publish and store sensor data
+        # Your existing publishing and storing code
         pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
-        store_sensor_data(pub_msg)  # Store sensor data right after publishing it
+        store_sensor_data(pub_msg)
         
-        # Process and store HomeWizard data separately
+        # Process and store HomeWizard data
         homewizard_data = process_homewizard_data("192.168.87.153")
         if homewizard_data:
             print("Power usage:", homewizard_data['power_usage']['current_usage_w'], "W")

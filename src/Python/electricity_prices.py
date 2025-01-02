@@ -39,8 +39,12 @@ def get_electricity_prices(date=None, price_region="SE3"):
             # Convert to Unix timestamp in nanoseconds
             timestamp_ns = int(timestamp.timestamp() * 1_000_000_000)
             
-            # Create line protocol entry for SEK price
-            line = f'electricity_price,region={price_region} price={price_data["SEK_per_kWh"]} {timestamp_ns}'
+            # Apply Vattenfall's price formula
+            spot_price = price_data["SEK_per_kWh"]
+            final_price = (spot_price * 1.25) + (13.53/100)
+            
+            # Create line protocol entry for calculated price
+            line = f'electricity_price,region={price_region} price={final_price} {timestamp_ns}'
             influx_lines.append(line)
         
         return influx_lines
