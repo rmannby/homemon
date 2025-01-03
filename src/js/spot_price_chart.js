@@ -67,12 +67,12 @@ const renderChart = (labels, data) => {
                 backgroundColor: 'rgba(2, 169, 231, 0.2)',
                 fill: true,
                 pointBackgroundColor: labels.map(label => label === currentHour ? 'red' : 'rgba(2, 169, 231, 1)'),
-                pointRadius: labels.map(label => label === currentHour ? 6 : 3), // Larger point for current hour
+                pointRadius: labels.map(label => label === currentHour ? 6 : 3),
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true, // Keep the aspect ratio consistent
+            maintainAspectRatio: true,
             plugins: {
                 legend: {
                     position: 'top',
@@ -80,15 +80,27 @@ const renderChart = (labels, data) => {
                 title: {
                     display: true,
                     text: 'Dagens El-spotpris'
+                },
+                annotation: {
+                    annotations: {
+                        line1: {
+                            type: 'line',
+                            yMin: 1.5,
+                            yMax: 1.5,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 2,
+                            borderDash: [6, 6],
+                            label: {
+                                content: '1.5 SEK',
+                                enabled: true,
+                                position: 'end',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)'
+                            }
+                        }
+                    }
                 }
             },
             scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Tid'
-                    }
-                },
                 y: {
                     title: {
                         display: true,
