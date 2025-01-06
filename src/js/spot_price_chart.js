@@ -14,11 +14,8 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
         const priceClass = 'SE3';
         const apiUrl = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${priceClass}.json`;
 
-        
-
         const response = await fetch(apiUrl);
         
-
         if (!response.ok) {
             if (response.status === 404) {
                 console.log(`Priser för ${dayOffset === 0 ? 'idag' : 'morgondagen'} är inte tillgängliga (404).`);
@@ -29,7 +26,6 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
         }
 
         const data = await response.json();
-        
 
         const labels = data.map(entry => {
             const date = new Date(entry.time_start);
@@ -38,16 +34,6 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
 
         // Vattenfall's price formula: (spot price × 1.25) + (13.53/100)
         const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53 / 100).toFixed(2));
-        const averagePrice = (prices.reduce((sum, price) => sum + Number(price), 0) / prices.length).toFixed(2);
-        const maxPrice = Math.max(...prices.map(Number)).toFixed(2);
-        const minPrice = Math.min(...prices.map(Number)).toFixed(2);
-
-        const statsElement = document.getElementById('priceStats');
-        const [avgElement, maxElement, minElement] = statsElement.querySelectorAll('p');
-
-        avgElement.innerHTML = `Genomsnitt: ${averagePrice} SEK/kWh`;
-        maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
-        minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 
         if (dayOffset === 0) {
             labelsToday = labels;
@@ -59,10 +45,24 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
         
         return { labels, prices };
 
-
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
     }
+};
+
+const updatePriceStats = (prices) => {
+    if (!prices || prices.length === 0) return;
+
+    const averagePrice = (prices.reduce((sum, price) => sum + Number(price), 0) / prices.length).toFixed(2);
+    const maxPrice = Math.max(...prices.map(Number)).toFixed(2);
+    const minPrice = Math.min(...prices.map(Number)).toFixed(2);
+
+    const statsElement = document.getElementById('priceStats');
+    const [avgElement, maxElement, minElement] = statsElement.querySelectorAll('p');
+
+    avgElement.innerHTML = `Genomsnitt: ${averagePrice} SEK/kWh`;
+    maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
+    minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 };
 
 const renderChart = (labels, data) => {
@@ -135,14 +135,16 @@ const renderChart = (labels, data) => {
 const updateChart = async (dayOffset) => {
     if (dayOffset === 0) {
         renderChart(labelsToday, pricesToday);
+        updatePriceStats(pricesToday);
     } else if (dayOffset === 1) {
         if (pricesTomorrow.length > 0) {
             renderChart(labelsTomorrow, pricesTomorrow);
+            updatePriceStats(pricesTomorrow);
         } else {
-            
             const result = await fetchElectricityPrices(1);
             if (result) {
                 renderChart(result.labels, result.prices);
+                updatePriceStats(result.prices);
             } else {
                 console.log("Morgondagens data är fortfarande inte tillgänglig.");
             }
@@ -154,6 +156,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Hämta och rendera dagens priser
     await fetchElectricityPrices(0); // Hämta dagens priser
     renderChart(labelsToday, pricesToday);
+    updatePriceStats(pricesToday);  // Add this line to update stats on initial load
 
     // Schemalägg periodisk hämtning av morgondagens priser
     setInterval(async () => {
