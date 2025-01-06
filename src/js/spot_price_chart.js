@@ -1,17 +1,35 @@
-// JavaScript code to fetch electricity prices and render them in a chart
 let chartInstance = null;
+let pricesToday = [];
+let labelsToday = [];
+let pricesTomorrow = [];
+let labelsTomorrow = [];
 
-const fetchElectricityPrices = async () => {
+const fetchElectricityPrices = async (dayOffset = 0) => {
     try {
         const today = new Date();
+        today.setDate(today.getDate() + dayOffset); // 0 för idag, 1 för morgondagen
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
         const priceClass = 'SE3';
         const apiUrl = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${priceClass}.json`;
 
+        
+
         const response = await fetch(apiUrl);
+        
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.log(`Priser för ${dayOffset === 0 ? 'idag' : 'morgondagen'} är inte tillgängliga (404).`);
+            } else {
+                console.error(`Fel vid hämtning av data (${response.status}):`, await response.text());
+            }
+            return null; // Om data inte finns för morgondagen
+        }
+
         const data = await response.json();
+        
 
         const labels = data.map(entry => {
             const date = new Date(entry.time_start);
@@ -19,8 +37,7 @@ const fetchElectricityPrices = async () => {
         });
 
         // Vattenfall's price formula: (spot price × 1.25) + (13.53/100)
-        const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53/100).toFixed(2));
-
+        const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53 / 100).toFixed(2));
         const averagePrice = (prices.reduce((sum, price) => sum + Number(price), 0) / prices.length).toFixed(2);
         const maxPrice = Math.max(...prices.map(Number)).toFixed(2);
         const minPrice = Math.min(...prices.map(Number)).toFixed(2);
@@ -32,29 +49,51 @@ const fetchElectricityPrices = async () => {
         maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
         minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 
-        renderChart(labels, prices);
+        if (dayOffset === 0) {
+            labelsToday = labels;
+            pricesToday = prices;
+        } else {
+            labelsTomorrow = labels;
+            pricesTomorrow = prices;
+        }
+        
+        return { labels, prices };
+
+
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
     }
 };
+
 const renderChart = (labels, data) => {
     const canvas = document.getElementById('priceChart');
-    canvas.height = 75; // Sätt önskad höjd i pixlar
-
+    canvas.height = 75;
     const ctx = canvas.getContext('2d');
 
-    // Destroy existing chart instance if it exists
     if (chartInstance) {
-        const now = new Date();
-        console.log(`[${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}] Destroying existing chart instance.`);
         chartInstance.destroy();
     }
 
-    // Determine the current hour
-    const now = new Date();
-    const currentHour = `${now.getHours()}:00`;
+    // Check if any value is >= 1.5
+    const hasHighValues = data.some(value => parseFloat(value) >= 1.5);
 
-    console.log(`[${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}] Re-rendering chart with updated data.`);
+    // Create annotations object only if there are high values
+    const annotations = hasHighValues ? {
+        line1: {
+            type: 'line',
+            yMin: 1.50,
+            yMax: 1.50,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 2,
+            borderDash: [6, 6],
+            label: {
+                content: '1.50 SEK',
+                enabled: true,
+                position: 'end',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)'
+            }
+        }
+    } : {};
 
     chartInstance = new Chart(ctx, {
         type: 'line',
@@ -66,56 +105,66 @@ const renderChart = (labels, data) => {
                 borderColor: 'rgba(2, 169, 231, 1)',
                 backgroundColor: 'rgba(2, 169, 231, 0.2)',
                 fill: true,
-                pointBackgroundColor: labels.map(label => label === currentHour ? 'red' : 'rgba(2, 169, 231, 1)'),
-                pointRadius: labels.map(label => label === currentHour ? 6 : 3),
+                pointBackgroundColor: labels.map(label => 
+                    label === `${new Date().getHours()}:00` ? 'red' : 'rgba(2, 169, 231, 1)'
+                ),
+                pointRadius: labels.map(label => 
+                    label === `${new Date().getHours()}:00` ? 6 : 3
+                ),
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: true,
-                    text: 'Dagens El-spotpris'
-                },
+                legend: { position: 'top' },
+                title: { display: true, text: 'El-spotpris' },
                 annotation: {
-                    annotations: {
-                        line1: {
-                            type: 'line',
-                            yMin: 1.5,
-                            yMax: 1.5,
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            borderWidth: 2,
-                            borderDash: [6, 6],
-                            label: {
-                                content: '1.5 SEK',
-                                enabled: true,
-                                position: 'end',
-                                backgroundColor: 'rgba(255, 99, 132, 0.2)'
-                            }
-                        }
-                    }
+                    annotations: annotations
                 }
             },
             scales: {
                 y: {
-                    title: {
-                        display: true,
-                        text: 'SEK/kWh'
-                    }
+                    title: { display: true, text: 'SEK/kWh' }
                 }
             }
         }
     });
 };
 
-// Fetch and render electricity prices on page load
-window.addEventListener('DOMContentLoaded', () => {
-    fetchElectricityPrices();
-    setInterval(() => {
-        fetchElectricityPrices();
-    }, 5 * 60 * 1000); // Uppdatera var femte minut
+const updateChart = async (dayOffset) => {
+    if (dayOffset === 0) {
+        renderChart(labelsToday, pricesToday);
+    } else if (dayOffset === 1) {
+        if (pricesTomorrow.length > 0) {
+            renderChart(labelsTomorrow, pricesTomorrow);
+        } else {
+            
+            const result = await fetchElectricityPrices(1);
+            if (result) {
+                renderChart(result.labels, result.prices);
+            } else {
+                console.log("Morgondagens data är fortfarande inte tillgänglig.");
+            }
+        }
+    }
+};
+
+window.addEventListener('DOMContentLoaded', async () => {
+    // Hämta och rendera dagens priser
+    await fetchElectricityPrices(0); // Hämta dagens priser
+    renderChart(labelsToday, pricesToday);
+
+    // Schemalägg periodisk hämtning av morgondagens priser
+    setInterval(async () => {
+        await fetchElectricityPrices(1); // Kontrollera morgondagens priser
+    }, 5 * 60 * 1000); // Var femte minut
+
+    // Lägg till eventlistener till befintlig dropdown
+    const selector = document.getElementById('priceSelector');
+    if (selector) {
+        selector.addEventListener('change', (e) => updateChart(Number(e.target.value)));
+    } else {
+        console.error("Dropdown med ID 'priceSelector' hittades inte i DOM.");
+    }
 });
