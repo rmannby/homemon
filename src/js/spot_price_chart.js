@@ -105,12 +105,14 @@ const renderChart = (labels, data) => {
                 borderColor: 'rgba(2, 169, 231, 1)',
                 backgroundColor: 'rgba(2, 169, 231, 0.2)',
                 fill: true,
-                pointBackgroundColor: labels.map(label => 
-                    label === `${new Date().getHours()}:00` ? 'red' : 'rgba(2, 169, 231, 1)'
-                ),
-                pointRadius: labels.map(label => 
-                    label === `${new Date().getHours()}:00` ? 6 : 3
-                ),
+                pointBackgroundColor: labels.map(label => {
+                    const isTomorrow = data === pricesTomorrow
+                    return (!isTomorrow && label === `${new Date().getHours()}:00`) ? 'red' : 'rgba(2, 169, 231, 1)'
+                }),
+                pointRadius: labels.map(label => {
+                    const isTomorrow = data === pricesTomorrow
+                    return (!isTomorrow && label === `${new Date().getHours()}:00`) ? 6 : 3
+                }),
             }]
         },
         options: {
@@ -156,13 +158,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Hämta och rendera dagens priser
     await fetchElectricityPrices(0); // Hämta dagens priser
     renderChart(labelsToday, pricesToday);
-    updatePriceStats(pricesToday);  // Add this line to update stats on initial load
+    updatePriceStats(pricesToday);
 
-    // Schemalägg periodisk hämtning av morgondagens priser
+    // Schemalägg periodisk hämtning av priser och uppdatering av chart
     setInterval(async () => {
-        await fetchElectricityPrices(1); // Kontrollera morgondagens priser
-    }, 5 * 60 * 1000); // Var femte minut
-
+        await fetchElectricityPrices(0); // Fetch today's prices
+        await fetchElectricityPrices(1); // Fetch tomorrow's prices
+        
+        // Reset selector to today's prices and update chart
+        const selector = document.getElementById('priceSelector');
+        if (selector) {
+            selector.value = "0";
+            updateChart(0);
+        }
+    }, 5 * 60 * 1000); // Every 5 minutes
     // Lägg till eventlistener till befintlig dropdown
     const selector = document.getElementById('priceSelector');
     if (selector) {
