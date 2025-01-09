@@ -187,16 +187,25 @@ const updateChart = async (dayOffset) => {
     }
 };
 
-window.addEventListener('DOMContentLoaded', async () => {
-    // Hämta och rendera dagens priser
-    await fetchElectricityPrices(0); // Hämta dagens priser
+// Initialize prices and start updates
+const initializePrices = async () => {
+    // Fetch both today's and tomorrow's prices immediately
+    await fetchElectricityPrices(0);
+    await fetchElectricityPrices(1);
+    
+    // Render initial chart with today's prices
     renderChart(labelsToday, pricesToday);
     updatePriceStats(pricesToday);
+};
 
-    // Schemalägg periodisk hämtning av priser och uppdatering av chart
+window.addEventListener('DOMContentLoaded', async () => {
+    // Initialize immediately
+    await initializePrices();
+
+    // Set up periodic updates
     setInterval(async () => {
-        await fetchElectricityPrices(0); // Fetch today's prices
-        await fetchElectricityPrices(1); // Fetch tomorrow's prices
+        await fetchElectricityPrices(0);
+        await fetchElectricityPrices(1);
         
         // Reset selector to today's prices and update chart
         const selector = document.getElementById('priceSelector');
@@ -205,7 +214,8 @@ window.addEventListener('DOMContentLoaded', async () => {
             updateChart(0);
         }
     }, 5 * 60 * 1000); // Every 5 minutes
-    // Lägg till eventlistener till befintlig dropdown
+
+    // Add event listener to the price selector
     const selector = document.getElementById('priceSelector');
     if (selector) {
         selector.addEventListener('change', (e) => updateChart(Number(e.target.value)));
