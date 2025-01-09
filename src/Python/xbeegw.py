@@ -90,25 +90,31 @@ def store_energy_data(data):
 
 def store_sensor_data(data):
     """
-    Store sensor data from pub_msg in InfluxDB
+    Store sensor data from pub_msg in InfluxDB, converting -99.9 values to None
     """
     try:
+        # Convert string values to float and check for -99.9
+        fields = {
+            "indoor_temp": None if float(data['indoor']) == -99.9 else float(data['indoor']),
+            "outdoor_north_temp": None if float(data['Outdoor north']) == -99.9 else float(data['Outdoor north']),
+            "outdoor_south_temp": None if float(data['Outdoor south']) == -99.9 else float(data['Outdoor south']),
+            "glassroom_temp": None if float(data['Glassroom']) == -99.9 else float(data['Glassroom']),
+            "pool_temp": None if float(data['Pool']) == -99.9 else float(data['Pool']),
+            "pool_heat_temp": None if float(data['Poolheat']) == -99.9 else float(data['Poolheat']),
+            "garage_temp": None if float(data['Garage']) == -99.9 else float(data['Garage']),
+            "mouse_trap_status": data['Mouse trapped']
+        }
+
+        # Remove None values from fields
+        fields = {k: v for k, v in fields.items() if v is not None}
+
         json_body = [
             {
                 "measurement": "temperature_sensors",
                 "tags": {
                     "source": "zigbee_gateway"
                 },
-                "fields": {
-                    "indoor_temp": float(data['indoor']),
-                    "outdoor_north_temp": float(data['Outdoor north']),
-                    "outdoor_south_temp": float(data['Outdoor south']),
-                    "glassroom_temp": float(data['Glassroom']),
-                    "pool_temp": float(data['Pool']),
-                    "pool_heat_temp": float(data['Poolheat']),
-                    "garage_temp": float(data['Garage']),
-                    "mouse_trap_status": data['Mouse trapped']
-                }
+                "fields": fields
             }
         ]
         

@@ -127,11 +127,18 @@ const renderChart = (labels, data) => {
             },
             scales: {
                 y: {
-                    title: { display: true, text: 'SEK/kWh' }
+                    title: { display: true, text: 'SEK/kWh' },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
                 }
             }
-        }
-    });
+        }    });
 };
 
 const updateChart = async (dayOffset) => {
