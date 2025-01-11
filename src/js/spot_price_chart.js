@@ -122,23 +122,22 @@ const renderChart = (labels, data) => {
     } : {};
 
     chartInstance = new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: labels,
             datasets: [{
                 label: 'Vattenfall-timpris (SEK/kWh)',
                 data: data,
                 borderColor: 'rgba(2, 169, 231, 1)',
-                backgroundColor: 'rgba(2, 169, 231, 0.2)',
-                fill: true,
-                pointBackgroundColor: labels.map(label => {
-                    const isTomorrow = data === pricesTomorrow
-                    return (!isTomorrow && label === `${new Date().getHours()}:00`) ? 'red' : 'rgba(2, 169, 231, 1)'
+                backgroundColor: labels.map(label => {
+                    const isTomorrow = data === pricesTomorrow;
+                    return (!isTomorrow && label === `${new Date().getHours()}:00`) 
+                        ? 'rgba(255, 99, 132, 0.6)'  // Highlighted red for current hour
+                        : 'rgba(2, 169, 231, 0.2)';  // Default blue
                 }),
-                pointRadius: labels.map(label => {
-                    const isTomorrow = data === pricesTomorrow
-                    return (!isTomorrow && label === `${new Date().getHours()}:00`) ? 6 : 3
-                }),
+                borderWidth: 1,
+                categoryPercentage: 0.95,
+                barPercentage: 0.95
             }]
         },
         options: {
@@ -164,7 +163,8 @@ const renderChart = (labels, data) => {
                     }
                 }
             }
-        }    });
+        }    
+    });
 };
 
 const updateChart = async (dayOffset) => {
