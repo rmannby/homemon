@@ -23,9 +23,9 @@ class Gateway:
             XBEE_CONFIG['baud_rate']
         )
         self.pubnub_handler = PubNubHandler(
-            **PUBNUB_CONFIG,
-            channel=PUBNUB_CHANNEL,
-            message_callback=self.handle_pubnub_message
+            subscribe_key=PUBNUB_CONFIG['subscribe_key'],
+            publish_key=PUBNUB_CONFIG['publish_key'],
+            user_id=PUBNUB_CONFIG['user_id']
         )
         
         self.last_price_fetch = None

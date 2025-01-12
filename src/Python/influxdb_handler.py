@@ -84,14 +84,8 @@ class InfluxDBHandler:
         """Store electricity prices in InfluxDB using line protocol"""
         try:
             success = self.client.write(lines, {'db': self.database}, protocol='line')
-            if success:
-                print("Electricity prices stored successfully")
-                return True
-            else:
-                print("Failed to store electricity prices")
-                return False
+            return success
                 
         except Exception as e:
             print(f"Error storing electricity prices: {e}")
             return False
-        
