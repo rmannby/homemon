@@ -1,596 +1,109 @@
-import serial, time, datetime, sys
-from pubnub.pnconfiguration import PNConfiguration
-from pubnub.pubnub import PubNub
-from pubnub.callbacks import SubscribeCallback
-from xbee import ZigBee
-from influxdb import InfluxDBClient
-import subprocess
-import json
-from electricity_prices import get_electricity_prices
-from datetime import datetime, timedelta
+from datetime import datetime
+import time
 
-#pubnub = Pubnub(publish_key='pub-c-6a121d53-b962-4a48-b425-10281417b24d', subscribe_key='sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe')
+from influxdb_handler import InfluxDBHandler
+from homewizard_handler import HomeWizardHandler
+from xbee_handler import XBeeHandler
+from pubnub_handler import PubNubHandler
+from electricityprices_handler import get_electricity_prices
+from config import (INFLUX_CONFIG, HOMEWIZARD_CONFIG, 
+                   PUBNUB_CONFIG, XBEE_CONFIG)
 
-# InfluxDB configuration
-INFLUX_HOST = 'localhost'
-INFLUX_PORT = 8086
-INFLUX_DATABASE = 'energy_monitoring'
+# Constants
+PUBNUB_CHANNEL = 'RpiGate'
+DEFAULT_PRICE_REGION = "SE3"
 
-# Initialize InfluxDB client
-influx_client = InfluxDBClient(
-    host=INFLUX_HOST,
-    port=INFLUX_PORT,
-    database=INFLUX_DATABASE
-)
-
-# Variables to store the last time electricity prices were fetched and the default price region.
-# `last_price_fetch` is used to track when the prices were last fetched, to avoid fetching them too frequently.
-# `price_region` is the default price region to use when fetching electricity prices.
-last_price_fetch = None
-price_region = "SE3"  # Your default price region
-
-def fetch_and_store_prices():
-    """
-    Fetch electricity prices and store them in InfluxDB using line protocol
-    Returns True if successful, False otherwise
-    """
-    try:
-        # Get prices for today
-        lines = get_electricity_prices(price_region=price_region)
-        if not lines:
-            print("No price data received")
-            return False
-            
-        # Write directly to InfluxDB using line protocol
-        success = influx_client.write(lines, {'db': INFLUX_DATABASE}, protocol='line')
-        if success:
-            print("Electricity prices stored successfully")
-            return True
-        else:
-            print("Failed to store electricity prices")
-            return False
-            
-    except Exception as e:
-        print(f"Error fetching/storing electricity prices: {e}")
-        return False
-
-def store_energy_data(data):
-    """
-    Store HomeWizard energy data in InfluxDB
-    """
-    try:
-        json_body = [
-            {
-                "measurement": "energy_usage",
-                "tags": {
-                    "source": "homewizard"
-                },
-                "fields": {
-                    "power_usage_w": float(data['power_usage']['current_usage_w']),
-                    "import_kwh": float(data['power_usage']['import_kwh']),
-                    "export_kwh": float(data['power_usage']['export_kwh']),
-                    "l1_power": float(data['per_phase']['L1']['power_w']),
-                    "l1_voltage": float(data['per_phase']['L1']['voltage_v']),
-                    "l1_current": float(data['per_phase']['L1']['current_a']),
-                    "l2_power": float(data['per_phase']['L2']['power_w']),
-                    "l2_voltage": float(data['per_phase']['L2']['voltage_v']),
-                    "l2_current": float(data['per_phase']['L2']['current_a']),
-                    "l3_power": float(data['per_phase']['L3']['power_w']),
-                    "l3_voltage": float(data['per_phase']['L3']['voltage_v']),
-                    "l3_current": float(data['per_phase']['L3']['current_a'])
-                }
-            }
-        ]
+class Gateway:
+    def __init__(self):
+        # Initialize all handlers
+        self.influx_handler = InfluxDBHandler(**INFLUX_CONFIG)
+        self.homewizard_handler = HomeWizardHandler(HOMEWIZARD_CONFIG['device_ip'])
+        self.xbee_handler = XBeeHandler(
+            XBEE_CONFIG['serial_port'], 
+            XBEE_CONFIG['baud_rate']
+        )
+        self.pubnub_handler = PubNubHandler(
+            **PUBNUB_CONFIG,
+            channel=PUBNUB_CHANNEL,
+            message_callback=self.handle_pubnub_message
+        )
         
-        influx_client.write_points(json_body)
-        print("Data stored in InfluxDB successfully")
+        self.last_price_fetch = None
+        print('Starting Up ZigBee Gateway!')
         
-    except Exception as e:
-        print(f"Error storing data in InfluxDB: {e}")
+        # Initial electricity price fetch
+        self.fetch_electricity_prices()
 
-def store_sensor_data(data):
-    """
-    Store sensor data from pub_msg in InfluxDB, converting -99.9 values to None
-    """
-    try:
-        # Convert string values to float and check for -99.9
-        fields = {
-            "indoor_temp": None if float(data['indoor']) == -99.9 else float(data['indoor']),
-            "outdoor_north_temp": None if float(data['Outdoor north']) == -99.9 else float(data['Outdoor north']),
-            "outdoor_south_temp": None if float(data['Outdoor south']) == -99.9 else float(data['Outdoor south']),
-            "glassroom_temp": None if float(data['Glassroom']) == -99.9 else float(data['Glassroom']),
-            "pool_temp": None if float(data['Pool']) == -99.9 else float(data['Pool']),
-            "pool_heat_temp": None if float(data['Poolheat']) == -99.9 else float(data['Poolheat']),
-            "garage_temp": None if float(data['Garage']) == -99.9 else float(data['Garage']),
-            "mouse_trap_status": data['Mouse trapped']
-        }
-
-        # Remove None values from fields
-        fields = {k: v for k, v in fields.items() if v is not None}
-
-        json_body = [
-            {
-                "measurement": "temperature_sensors",
-                "tags": {
-                    "source": "zigbee_gateway"
-                },
-                "fields": fields
-            }
-        ]
-        
-        influx_client.write_points(json_body)
-        print("Sensor data stored in InfluxDB successfully")
-        
-    except Exception as e:
-        print(f"Error storing sensor data in InfluxDB: {e}")
-
-class MySubscribeCallback(SubscribeCallback):
-    def status(self, pubnub, status):
-        pass
-
-    def presence(self, pubnub, presence):
-        pass
-
-    def message(self, pubnub, message):
-        if message.message == 'Connected':
+    def handle_pubnub_message(self, message):
+        """Handle incoming PubNub messages"""
+        if message == 'Connected':
             print('hello client')
             print('Connected! Publish data')
-            pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
+            current_data = self.xbee_handler.get_current_data()
+            self.pubnub_handler.publish_data(current_data)
 
+    def fetch_electricity_prices(self):
+        """Fetch and store electricity prices"""
+        print('Fetching electricity prices')
+        prices = get_electricity_prices(price_region=DEFAULT_PRICE_REGION)
+        if prices and self.influx_handler.store_electricity_prices(prices):
+            self.last_price_fetch = datetime.now()
+            print("Electricity prices stored successfully")
         else:
-            print(message.message)
-
-
-
-def publish_callback(result, status):
-    if not status.is_error():
-        print('Message published successfully')
-    else:
-        print('Publish failed')
-
-
-pnconfig = PNConfiguration()
-pnconfig.subscribe_key = 'sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe'
-pnconfig.publish_key = 'pub-c-6a121d53-b962-4a48-b425-10281417b24d'
-pnconfig.user_id = 'mby_user'
-
-pubnub = PubNub(pnconfig)
-pubnub.add_listener(MySubscribeCallback())
-pubnub.subscribe().channels('RpiGate').execute()
-
-#channel = 'RpiGate'
-
-pool_node = '\x14\xa6'
-pool_node_long = b'\x00\x13\xa2\x00A\x05p;'
-glassroom_node = '7\xc2'
-glassroom_node_long = b'\x00\x13\xa2\x00A\x05n\xdf'
-livingroom_long = b'\x00\x13\xa2\x00AO8l'
-garage_node = '%\xd0'
-garage_node_long = b'\x00\x13\xa2\x00AO8\x1c'
-
-#router_node = '\xfb\x8b'
-
-pool = {}
-glassroom = {}
-router = {}
-livingroom = {}
-garage = {}
-pub_msg = {}
-
-pool_temp_out = 0
-pool_temp_in = 0
-pool_temp_south = 0
-glassroom_temp = 0
-glassroom_north = 0
-indoor_temp = 0
-garage_temp = 0
-mouse_trapped = "Trip"
-
-#MinMax
-pool_temp_out_max = -100
-pool_temp_in_max = -100
-pool_temp_south_max = -100
-glassroom_temp_max = -100
-glassroom_north_max = -100
-indoor_temp_max = -100
-garage_temp_max = -100
-
-pool_temp_out_min = 100
-pool_temp_in_min = 100
-pool_temp_south_min = 100
-glassroom_temp_min = 100
-glassroom_north_min = 100
-indoor_temp_min = 100
-garage_temp_min = 100
-
-
-pool_node_cnt = 0
-glassroom_node_cnt = 0
-livingroom_node_cnt = 0
-garage_node_cnt = 0
-
-def fetch_data_from_device(device_ip):
-    try:
-        # Use curl to fetch data from the /api/v1/data endpoint
-        result = subprocess.run(
-            ["curl", f"http://{device_ip}/api/v1/data"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            print("Error executing curl:", result.stderr)
-            return None
-
-        # Parse the JSON response
-        json_data = json.loads(result.stdout)
-        return json_data
-
-    except json.JSONDecodeError:
-        print("Failed to parse JSON response.")
-    except subprocess.TimeoutExpired:
-        print("Request timed out.")
-    except Exception as e:
-        print("An unexpected error occurred:", e)
-
-    return None
-
-def process_homewizard_data(device_ip):
-    data = fetch_data_from_device(device_ip)
-    if data:
-        try:
-            processed_data = {
-                'power_usage': {
-                    'current_usage_w': data['active_power_w'],
-                    'import_kwh': data['total_power_import_kwh'],
-                    'export_kwh': data['total_power_export_kwh']
-                },
-                'per_phase': {
-                    'L1': {
-                        'power_w': data['active_power_l1_w'],
-                        'voltage_v': data['active_voltage_l1_v'],
-                        'current_a': data['active_current_l1_a']
-                    },
-                    'L2': {
-                        'power_w': data['active_power_l2_w'],
-                        'voltage_v': data['active_voltage_l2_v'],
-                        'current_a': data['active_current_l2_a']
-                    },
-                    'L3': {
-                        'power_w': data['active_power_l3_w'],
-                        'voltage_v': data['active_voltage_l3_v'],
-                        'current_a': data['active_current_l3_a']
-                    }
-                },
-                'wifi': {
-                    'ssid': data['wifi_ssid'],
-                    'strength': data['wifi_strength']
-                }
-            }
-            print("Processed Homewizard data successfully")
-            return processed_data
-        except KeyError as e:
-            print(f"Missing expected field in Homewizard data: {e}")
-            return None
-    else:
-        print("Failed to fetch Homewizard data")
-        return None
-    
-# the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
-SERIALPORT = "/dev/ttyS0"
-BAUDRATE = 9600      # the baud rate we talk to the xbee
-
-ser = serial.Serial(SERIALPORT, BAUDRATE)
-
-#temp1 = (adc-x * 0.001216 - 0.5) * 100;
-#get the current temp from a list of voltage readings
-def get_temperature(data, cal = 0.0, channel="adc-0", format="C"):
-    #iterate over data elements
-    #readings = []
-    for item in data:
-        #readings.append(item.get('adc-0'))
-        adc = item.get(channel)
-
-    #start by averaging the data
-    #adc = sum(readings)/float(len(readings))
-    
-    #now calculate the proper mv
-    #we are using a 3.3v usb explorer so the formula is slightly different
-    temperature = (((adc * 0.001216) - 0.5) * 100) - cal    
-
-    if format=="F":
-        #convert to farenheit
-        temperature = (temperature * 1.8) + 32
-
-    return temperature
-
-
-#get the current battery voltage readings
-def get_battery(data, channel="adc-2"):
-    #iterate over data elements
-    for item in data:
-        adc = item.get(channel)
-
-    #now calculate the proper mv
-    #bat = ((xbeeMsg.b1_hi * 256 + xbeeMsg.b1_lo) * 0.0476 - 5.5935) / 10;    
-    battery = adc    
-
-    return battery
-
-#get mouse trapped or not
-def get_mouse_trapped(data, channel="dio-1"):
-    #iterate over data elements
-    for item in data:
-        dio = item.get(channel)
-        
-    if dio == False:
-        trapped = "Trip"
-    else:
-        trapped = "Set"
-        
-            
-
-    return trapped
-
-def pub_back(m):
-  print(m)
-
-def publish(msg):
-    pubnub.publish(channel, msg, callback=pub_back, error=pub_back)
-
-def message_received(data):
-    print('Xbee message received')
-    # print(data)
-    global pub_msg
-    global pool_temp_out
-    global pool_temp_in
-    global pool_temp_south
-    global glassroom_temp
-    global glassroom_north
-    global indoor_temp
-    global garage_temp
-    global mouse_trapped
-
-    global pool_temp_out_max
-    global pool_temp_in_max
-    global pool_temp_south_max
-    global glassroom_temp_max
-    global glassroom_north_max
-    global indoor_temp_max
-    global garage_temp_max
-
-    global pool_temp_out_min
-    global pool_temp_in_min
-    global pool_temp_south_min
-    global glassroom_temp_min
-    global glassroom_north_min
-    global indoor_temp_min
-    global garage_temp_min
-
-    global pool_node_cnt
-    global glassroom_node_cnt
-    global livingroom_node_cnt
-    global garage_node_cnt
-
-    #Node presence counter
-    pool_node_cnt += 1
-    glassroom_node_cnt += 1
-    livingroom_node_cnt += 1
-    garage_node_cnt += 1
-    
-    address = data['source_addr_long']
-    
-    if address == pool_node_long:
-        pool_node_cnt = 0
-        pool = data
-        pool_temp_out = get_temperature(pool['samples'], 1.92, "adc-0", format="C")
-        pool_temp_in = get_temperature(pool['samples'], 1.8, "adc-1", format="C")
-        pool_temp_south = get_temperature(pool['samples'], 2.0, "adc-2", format="C")
-
-        #MinMax
-        if pool_temp_out > pool_temp_out_max:
-            pool_temp_out_max = pool_temp_out
-            
-        if pool_temp_out < pool_temp_out_min:
-            pool_temp_out_min = pool_temp_out
-
-        if pool_temp_in > pool_temp_in_max:
-            pool_temp_in_max = pool_temp_in
-            
-        if pool_temp_in < pool_temp_in_min:
-            pool_temp_in_min = pool_temp_in
-
-        if pool_temp_south > pool_temp_south_max:
-            pool_temp_south_max = pool_temp_south
-
-        if pool_temp_south < pool_temp_south_min:
-            pool_temp_south_min = pool_temp_south
-
-        print('Pool output: {:.2f}'.format(pool_temp_out))
-        print('Pool input: {:.2f}'.format(pool_temp_in))
-        print('Pool south: {:.2f}'.format(pool_temp_south))
-
-##        print('Pool output max: {:.2f}'.format(pool_temp_out_max))
-##        print('Pool input max: {:.2f}'.format(pool_temp_in_max))
-##        print('Pool south max: {:.2f}'.format(pool_temp_south_max))
-##        
-##        print('Pool output min: {:.2f}'.format(pool_temp_out_min))
-##        print('Pool input min: {:.2f}'.format(pool_temp_in_min))
-##        print('Pool south min: {:.2f}'.format(pool_temp_south_min))
-
-    if address == glassroom_node_long:
-        glassroom_node_cnt = 0
-        glassroom = data
-        glassroom_temp = get_temperature(glassroom['samples'], 2.0, "adc-0", format="C")
-        glassroom_north = get_temperature(glassroom['samples'], 2.0, "adc-1", format="C")
-
-        if glassroom_temp > glassroom_temp_max:
-            glassroom_temp_max = glassroom_temp
-
-        if glassroom_temp < glassroom_temp_min:
-            glassroom_temp_min = glassroom_temp
-
-        if glassroom_north > glassroom_north_max:
-            glassroom_north_max = glassroom_north
-
-        if glassroom_north < glassroom_north_min:
-            glassroom_north_min = glassroom_north
-
-        print('Glass room temp: {:.2f}'.format(glassroom_temp))
-        print('Glass room north: {:.2f}'.format(glassroom_north))
-
-
-    if address == livingroom_long:
-        livingroom_node_cnt = 0
-        livingroom = data
-        indoor_temp = get_temperature(livingroom['samples'], 2.0, "adc-0", format="C")
-
-        if indoor_temp > indoor_temp_max:
-            indoor_temp_max = indoor_temp
-        
-        if indoor_temp < indoor_temp_min:
-            indoor_temp_min = indoor_temp
-        
-        print('livingroom temp: {:.2f}'.format(indoor_temp))
-
-    if address == garage_node_long:
-        garage_node_cnt = 0
-        garage = data
-        garage_temp = get_temperature(garage['samples'], 2.0, "adc-0", format="C")
-        mouse_trapped = get_mouse_trapped(garage['samples'], "dio-1")
-
-        if garage_temp > garage_temp_max:
-            garage_temp_max = garage_temp
-            
-        if garage_temp < garage_temp_min:
-            garage_temp_min = garage_temp
-            
-        print('Garage temp: {:.2f}'.format(garage_temp))
-
-        s = 'The trap is: ' + mouse_trapped
-        print(s)
-
-    #Presence handling
-    if pool_node_cnt > 20:
-        pool_node_cnt = 0
-        pool_temp_out = -99.9
-        pool_temp_in = -99.9
-        # pool_temp_south = -99.9
-                
-    if glassroom_node_cnt > 20:
-        glassroom_node_cnt = 0
-        glassroom_temp = -99.9
-        glassroom_north = -99.9
-       
-    if livingroom_node_cnt > 20:
-        livingroom_node_cnt = 0
-        indoor_temp = -99.9
-
-    if garage_node_cnt > 20:
-        garage_node_cnt = 0
-        garage_temp = -99.9
-        mouse_trapped = "Trip"
-
-     
-    #Publish to PubNub
-    pub_msg = {
-        'Channel': 'RpiGate',
-        'indoor': '{:.1f}'.format(indoor_temp),
-        'Outdoor north': '{:.1f}'.format(glassroom_north),
-        'Outdoor south': '{:.1f}'.format(pool_temp_south),
-        'Glassroom': '{:.1f}'.format(glassroom_temp),
-        'Pool': '{:.1f}'.format(pool_temp_out),
-        'Poolheat': '{:.1f}'.format(pool_temp_in),
-        'Garage': '{:.1f}'.format(garage_temp),
-        'Mouse trapped': mouse_trapped,
-        'MinMax': {
-            'indoor_max': '{:.1f}'.format(indoor_temp_max),
-            'indoor_min': '{:.1f}'.format(indoor_temp_min),
-            'glassroom_max': '{:.1f}'.format(glassroom_temp_max),
-            'glassroom_min': '{:.1f}'.format(glassroom_temp_min),
-            'outdoor_north_max': '{:.1f}'.format(glassroom_north_max),
-            'outdoor_north_min': '{:.1f}'.format(glassroom_north_min),
-            'outdoor_south_max': '{:.1f}'.format(pool_temp_south_max),
-            'outdoor_south_min': '{:.1f}'.format(pool_temp_south_min),
-            'pool_max': '{:.1f}'.format(pool_temp_out_max),
-            'pool_min': '{:.1f}'.format(pool_temp_out_min),
-            'pool_heat_max': '{:.1f}'.format(pool_temp_in_max),
-            'pool_heat_min': '{:.1f}'.format(pool_temp_in_min),
-            'garage_max': '{:.1f}'.format(garage_temp_max),
-            'garage_min': '{:.1f}'.format(garage_temp_min)
-            }
-    }
-  
-
-def clear_minmax():
-    # This function resets the min and max temperature values to the current readings
-    print('minmax clear')
-    pool_temp_out_max = pool_temp_out          
-    pool_temp_out_min = pool_temp_out
-    pool_temp_in_max = pool_temp_in        
-    pool_temp_in_min = pool_temp_in
-    pool_temp_south_max = pool_temp_south
-    pool_temp_south_min = pool_temp_south
-
-    glassroom_temp_max = glassroom_temp
-    glassroom_temp_min = glassroom_temp
-    glassroom_north_max = glassroom_north
-    glassroom_north_min = glassroom_north
-
-    indoor_temp_max = indoor_temp
-    indoor_temp_min = indoor_temp
-
-    garage_temp_max = garage_temp
-    garage_temp_min = garage_temp
-
-
-
-# Create API object, which spawns a new thread
-xbee = ZigBee(ser, callback=message_received)
-
-print ('Starting Up ZigBee Gateway!')
-
-# Initial fetch of electricity prices
-print('Fetching initial electricity prices')
-if fetch_and_store_prices():
-    last_price_fetch = datetime.now()
-else:
-    print("Initial price fetch failed, will retry at next scheduled time")
-    
-# Continuously read and print packets
-while True:
-    try:
-        current_time = datetime.now()
-        
-        # Check if we need to fetch prices (do it early in the morning, e.g., at 1 AM)
-        if (last_price_fetch is None or 
-            current_time.date() > last_price_fetch.date()) and \
+            print("Failed to fetch/store electricity prices, will retry at next scheduled time")
+
+    def check_and_update_prices(self, current_time):
+        """Check if prices need to be updated and fetch if necessary"""
+        if (self.last_price_fetch is None or 
+            current_time.date() > self.last_price_fetch.date()) and \
             current_time.hour == 1:
-            
-            print("Fetching electricity prices for today")
-            if fetch_and_store_prices():
-                last_price_fetch = current_time
-        
-        # Your existing 60-second loop
-        for _ in range(60):
-            time.sleep(1)
-            # Check for messages or other tasks here if needed
-        
-        print('Publish data!')
-        # Your existing publishing and storing code
-        pubnub.publish().channel('RpiGate').message(pub_msg).pn_async(publish_callback)
-        store_sensor_data(pub_msg)
-        
-        # Process and store HomeWizard data
-        homewizard_data = process_homewizard_data("192.168.87.153")
-        if homewizard_data:
-            print("Power usage:", homewizard_data['power_usage']['current_usage_w'], "W")
-            print("Import:", homewizard_data['power_usage']['import_kwh'], "kWh")
-            print("Export:", homewizard_data['power_usage']['export_kwh'], "kWh")
-            store_energy_data(homewizard_data)
-                                    
-    except KeyboardInterrupt:
-        break
+            self.fetch_electricity_prices()
 
-ser.close()
+    def process_and_store_sensor_data(self):
+        """Process and store sensor data from XBee"""
+        sensor_data = self.xbee_handler.get_current_data()
+        print('Publishing sensor data!')
+        self.pubnub_handler.publish_data(sensor_data)
+        self.influx_handler.store_sensor_data(sensor_data)
+
+    def process_and_store_energy_data(self):
+        """Process and store energy data from HomeWizard"""
+        energy_data = self.homewizard_handler.process_data()
+        if energy_data:
+            print("Power usage:", energy_data['power_usage']['current_usage_w'], "W")
+            print("Import:", energy_data['power_usage']['import_kwh'], "kWh")
+            print("Export:", energy_data['power_usage']['export_kwh'], "kWh")
+            self.influx_handler.store_energy_data(energy_data)
+
+    def run(self):
+        """Main gateway loop"""
+        try:
+            while True:
+                current_time = datetime.now()
+                
+                # Check if we need to fetch new prices
+                self.check_and_update_prices(current_time)
+                
+                # Wait for 60 seconds while collecting data
+                for _ in range(60):
+                    time.sleep(1)
+                
+                # Process and store all data
+                self.process_and_store_sensor_data()
+                self.process_and_store_energy_data()
+                                        
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        finally:
+            self.cleanup()
+
+    def cleanup(self):
+        """Clean up resources"""
+        self.xbee_handler.close()
+
+def main():
+    gateway = Gateway()
+    gateway.run()
+
+if __name__ == "__main__":
+    main()
