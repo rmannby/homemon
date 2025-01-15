@@ -1,0 +1,6 @@
+{
+    "type": "query_request",
+    "query_type": "hourly_energy",
+    "day_offset": 0,
+    "response_channel": "Channel-Barcelona"
+}
