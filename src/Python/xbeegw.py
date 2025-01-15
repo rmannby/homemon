@@ -22,10 +22,12 @@ class Gateway:
             XBEE_CONFIG['serial_port'], 
             XBEE_CONFIG['baud_rate']
         )
+        # Initialize PubNub with the message handler
         self.pubnub_handler = PubNubHandler(
             subscribe_key=PUBNUB_CONFIG['subscribe_key'],
             publish_key=PUBNUB_CONFIG['publish_key'],
-            user_id=PUBNUB_CONFIG['user_id']
+            user_id=PUBNUB_CONFIG['user_id'],
+            message_callback=self.handle_pubnub_message
         )
         
         self.last_price_fetch = None
@@ -36,11 +38,49 @@ class Gateway:
 
     def handle_pubnub_message(self, message):
         """Handle incoming PubNub messages"""
-        if message == 'Connected':
-            print('hello client')
-            print('Connected! Publish data')
-            current_data = self.xbee_handler.get_current_data()
-            self.pubnub_handler.publish_data(current_data)
+        print(f"Gateway handling message: {message}")  # Debug print
+        try:
+            if isinstance(message, dict):
+                # Skip processing our own published responses
+                if message.get('data_type') == 'hourly_energy_import':
+                    print("Skipping processing of our own response")
+                    return
+                # Handle query requests
+                if message.get('type') == 'query_request':
+                    query_type = message.get('query_type')
+                    
+                    if query_type == 'hourly_energy':
+                        # Get the requested day offset and response channel
+                        day_offset = message.get('day_offset', 0)
+                        response_channel = message.get('response_channel', PUBNUB_CHANNEL)
+                        
+                        print(f"Processing hourly_energy request: offset={day_offset}, channel={response_channel}")  # Debug print
+                        
+                        # Validate day_offset
+                        try:
+                            day_offset = int(day_offset)
+                            if day_offset < 0:
+                                raise ValueError("day_offset must be non-negative")
+                        except (TypeError, ValueError) as e:
+                            print(f"Invalid day_offset: {e}")
+                            return
+                            
+                        self.publish_hourly_energy_import(day_offset, response_channel)
+                    else:
+                        print(f"Unsupported query type: {query_type}")
+                        
+            elif message == 'Connected':
+                print('hello client')
+                print('Connected! Publishing current data...')
+                current_data = self.xbee_handler.get_current_data()
+                self.pubnub_handler.publish_data(current_data)
+            else:
+                print(f"Unhandled message type: {type(message)}")
+                
+        except Exception as e:
+            print(f"Error handling PubNub message: {e}")
+            import traceback
+            traceback.print_exc()  # Print full stack trace
 
     def fetch_electricity_prices(self):
         """Fetch and store electricity prices"""
@@ -74,6 +114,26 @@ class Gateway:
             print("Import:", energy_data['power_usage']['import_kwh'], "kWh")
             print("Export:", energy_data['power_usage']['export_kwh'], "kWh")
             self.influx_handler.store_energy_data(energy_data)
+            
+    def publish_hourly_energy_import(self, day_offset: int = 0, response_channel: str = PUBNUB_CHANNEL):
+        """Publish hourly energy import data to PubNub"""
+        try:
+            hourly_data = self.influx_handler.get_hourly_energy_import(day_offset)
+            if hourly_data:
+                summary_data = {
+                    'Channel': response_channel,
+                    'data_type': 'hourly_energy_import',
+                    'day_offset': day_offset,
+                    'hourly_usage': hourly_data,
+                    'timestamp': datetime.now().isoformat()
+                }
+                self.pubnub_handler.publish_data(summary_data, response_channel)
+                print(f"Published hourly energy import data (day offset: {day_offset})")
+            else:
+                print(f"No hourly energy data available for day offset: {day_offset}")
+                
+        except Exception as e:
+            print(f"Error publishing hourly energy import: {e}")
 
     def run(self):
         """Main gateway loop"""

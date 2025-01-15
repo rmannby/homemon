@@ -3,7 +3,6 @@ from typing import Dict, Any, Optional, List
 import json
 import subprocess
 from datetime import datetime
-
 class InfluxDBHandler:
     def __init__(self, host: str = 'localhost', port: int = 8086, database: str = 'energy_monitoring'):
         """Initialize InfluxDB connection and handler"""
@@ -89,3 +88,54 @@ class InfluxDBHandler:
         except Exception as e:
             print(f"Error storing electricity prices: {e}")
             return False
+
+    def get_hourly_energy_import(self, day_offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Get hourly energy import data for a specific day
+        
+        Args:
+            day_offset (int): Days to look back (0 = today, 1 = yesterday, etc.)
+        
+        Returns:
+            List[Dict[str, Any]]: List of hourly energy usage data points
+        """
+        try:
+            # Calculate the time window for the query
+            if day_offset == 0:
+                # For today, get from midnight to now
+                query = """
+                    SELECT 
+                        DIFFERENCE(LAST("import_kwh")) as hourly_usage
+                    FROM energy_usage
+                    WHERE time >= '2025-01-13T23:00:00Z' AND time < '2025-01-14T23:00:00Z'
+                    GROUP BY time(1h)
+                """
+            else:
+                # For past days, get full 24-hour periods
+                query = f"""
+                    SELECT 
+                        DIFFERENCE(LAST("import_kwh")) as hourly_usage
+                    FROM energy_usage
+                    WHERE time >= '2025-01-12T23:00:00Z' AND time < '2025-01-14T23:00:00Z'
+                    GROUP BY time(1h)
+                """
+            
+            result = self.client.query(query)
+            points = list(result.get_points())
+            
+            # Format the results with hour and usage
+            hourly_data = []
+            for point in points:
+                if point['hourly_usage'] is not None:  # Filter out null values
+                    timestamp = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                    hourly_data.append({
+                        'hour': timestamp.hour,
+                        'datetime': timestamp.isoformat(),
+                        'usage_kwh': round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
+                    })
+            
+            return hourly_data
+            
+        except Exception as e:
+            print(f"Error getting hourly energy import: {e}")
+            return []
