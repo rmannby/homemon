@@ -4,3 +4,25 @@
     "day_offset": 0,
     "response_channel": "Channel-Barcelona"
 }
+
+{
+    "type": "query_request",
+    "query_type": "hourly_energy",
+    "day_offset": 1,
+    "response_channel": "Channel-Query"
+}
+
+{
+    "type": "query_request",
+    "query_type": "database_query",
+    "response_channel": "Channel-Query",
+    "query_params": {
+        "measurement": "energy_usage",
+        "fields": ["DIFFERENCE(LAST(\"import_kwh\")) as hourly_usage"],
+        "time_range": {
+            "start": "2025-01-14T00:00:00Z",
+            "end": "2025-01-15T00:00:00Z"
+        },
+        "group_by": "1h"
+    }
+}
