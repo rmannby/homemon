@@ -17,43 +17,53 @@ class XBeeHandler:
 
     def __init__(self, serial_port: str, baud_rate: int):
         """Initialize XBee handler"""
-        self.ser = serial.Serial(serial_port, baud_rate)
-        self.xbee = ZigBee(self.ser, callback=self._message_received)
-        
-        # Temperature values
-        self.pool_temp_out = -99.9
-        self.pool_temp_in = -99.9
-        self.pool_temp_south = -99.9
-        self.glassroom_temp = -99.9
-        self.glassroom_north = -99.9
-        self.indoor_temp = -99.9
-        self.garage_temp = -99.9
-        self.mouse_trapped = "Trip"
+        try:
+            self.ser = serial.Serial(serial_port, baud_rate)
+            self.xbee = ZigBee(self.ser, callback=self._message_received)
+            
+            # Temperature values
+            self.pool_temp_out = -99.9
+            self.pool_temp_in = -99.9
+            self.pool_temp_south = -99.9
+            self.glassroom_temp = -99.9
+            self.glassroom_north = -99.9
+            self.indoor_temp = -99.9
+            self.garage_temp = -99.9
+            self.mouse_trapped = "Trip"
 
-        # Min/Max values
-        self.pool_temp_out_max = -100
-        self.pool_temp_in_max = -100
-        self.pool_temp_south_max = -100
-        self.glassroom_temp_max = -100
-        self.glassroom_north_max = -100
-        self.indoor_temp_max = -100
-        self.garage_temp_max = -100
+            # Min/Max values
+            self.pool_temp_out_max = -100
+            self.pool_temp_in_max = -100
+            self.pool_temp_south_max = -100
+            self.glassroom_temp_max = -100
+            self.glassroom_north_max = -100
+            self.indoor_temp_max = -100
+            self.garage_temp_max = -100
 
-        self.pool_temp_out_min = 100
-        self.pool_temp_in_min = 100
-        self.pool_temp_south_min = 100
-        self.glassroom_temp_min = 100
-        self.glassroom_north_min = 100
-        self.indoor_temp_min = 100
-        self.garage_temp_min = 100
+            self.pool_temp_out_min = 100
+            self.pool_temp_in_min = 100
+            self.pool_temp_south_min = 100
+            self.glassroom_temp_min = 100
+            self.glassroom_north_min = 100
+            self.indoor_temp_min = 100
+            self.garage_temp_min = 100
 
-        # Node presence counters
-        self.pool_node_cnt = 0
-        self.glassroom_node_cnt = 0
-        self.livingroom_node_cnt = 0
-        self.garage_node_cnt = 0
-        
-        print('Starting Up XBee Handler!')
+            # Node presence counters
+            self.pool_node_cnt = 0
+            self.glassroom_node_cnt = 0
+            self.livingroom_node_cnt = 0
+            self.garage_node_cnt = 0
+            
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] XBee Handler initialized successfully!")
+            print(f"├── Serial Port: {serial_port}")
+            print(f"└── Baud Rate: {baud_rate}")
+            
+        except Exception as e:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] Error initializing XBee Handler:")
+            print(f"└── Error: {str(e)}")
+            raise
 
     def get_temperature(self, data: Dict, cal: float = 0.0, channel: str = "adc-0", format: str = "C") -> float:
         """Calculate temperature from ADC readings"""
@@ -84,35 +94,45 @@ class XBeeHandler:
 
     def _message_received(self, data: Dict[str, Any]):
         """Process received XBee message"""
-        print('Xbee message received')
-        
-        # Update node counters
-        self.pool_node_cnt += 1
-        self.glassroom_node_cnt += 1
-        self.livingroom_node_cnt += 1
-        self.garage_node_cnt += 1
-        
-        address = data['source_addr_long']
-        
-        if address == self.POOL_NODE_LONG:
-            self.pool_node_cnt = 0
-            self._process_pool_data(data)
-        elif address == self.GLASSROOM_NODE_LONG:
-            self.glassroom_node_cnt = 0
-            self._process_glassroom_data(data)
-        elif address == self.LIVINGROOM_LONG:
-            self.livingroom_node_cnt = 0
-            self._process_livingroom_data(data)
-        elif address == self.GARAGE_NODE_LONG:
-            self.garage_node_cnt = 0
-            self._process_garage_data(data)
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"\n[{timestamp}] XBee message received")
+            
+            # Update node counters
+            self.pool_node_cnt += 1
+            self.glassroom_node_cnt += 1
+            self.livingroom_node_cnt += 1
+            self.garage_node_cnt += 1
+            
+            address = data['source_addr_long']
+            
+            if address == self.POOL_NODE_LONG:
+                self.pool_node_cnt = 0
+                self._process_pool_data(data)
+            elif address == self.GLASSROOM_NODE_LONG:
+                self.glassroom_node_cnt = 0
+                self._process_glassroom_data(data)
+            elif address == self.LIVINGROOM_LONG:
+                self.livingroom_node_cnt = 0
+                self._process_livingroom_data(data)
+            elif address == self.GARAGE_NODE_LONG:
+                self.garage_node_cnt = 0
+                self._process_garage_data(data)
 
-        self._check_node_presence()
+            self._check_node_presence()
+            
+        except Exception as e:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] Error processing XBee message:")
+            print(f"└── Error: {str(e)}")
 
     def _process_pool_data(self, data: Dict[str, Any]):
         """Process data from pool node"""
         if 'samples' not in data:
             return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Processing pool node data")
 
         self.pool_temp_out = self.get_temperature(data['samples'], 1.92, "adc-0")
         self.pool_temp_in = self.get_temperature(data['samples'], 1.8, "adc-1")
@@ -134,14 +154,17 @@ class XBeeHandler:
         if self.pool_temp_south < self.pool_temp_south_min:
             self.pool_temp_south_min = self.pool_temp_south
 
-        print('Pool output: {:.2f}'.format(self.pool_temp_out))
-        print('Pool input: {:.2f}'.format(self.pool_temp_in))
-        print('Pool south: {:.2f}'.format(self.pool_temp_south))
+        print(f"├── Pool output: {self.pool_temp_out:.2f}°C")
+        print(f"├── Pool input: {self.pool_temp_in:.2f}°C")
+        print(f"└── Pool south: {self.pool_temp_south:.2f}°C")
 
     def _process_glassroom_data(self, data: Dict[str, Any]):
         """Process data from glassroom node"""
         if 'samples' not in data:
             return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Processing glass room data")
 
         self.glassroom_temp = self.get_temperature(data['samples'], 2.0, "adc-0")
         self.glassroom_north = self.get_temperature(data['samples'], 2.0, "adc-1")
@@ -157,13 +180,16 @@ class XBeeHandler:
         if self.glassroom_north < self.glassroom_north_min:
             self.glassroom_north_min = self.glassroom_north
 
-        print('Glass room temp: {:.2f}'.format(self.glassroom_temp))
-        print('Glass room north: {:.2f}'.format(self.glassroom_north))
+        print(f"├── Glass room temp: {self.glassroom_temp:.2f}°C")
+        print(f"└── Glass room north: {self.glassroom_north:.2f}°C")
 
     def _process_livingroom_data(self, data: Dict[str, Any]):
         """Process data from livingroom node"""
         if 'samples' not in data:
             return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Processing living room data")
 
         self.indoor_temp = self.get_temperature(data['samples'], 2.0, "adc-0")
 
@@ -173,12 +199,15 @@ class XBeeHandler:
         if self.indoor_temp < self.indoor_temp_min:
             self.indoor_temp_min = self.indoor_temp
             
-        print('livingroom temp: {:.2f}'.format(self.indoor_temp))
+        print(f"└── Living room temp: {self.indoor_temp:.2f}°C")
 
     def _process_garage_data(self, data: Dict[str, Any]):
         """Process data from garage node"""
         if 'samples' not in data:
             return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Processing garage data")
 
         self.garage_temp = self.get_temperature(data['samples'], 2.0, "adc-0")
         self.mouse_trapped = self.get_mouse_trapped(data['samples'], "dio-1")
@@ -189,28 +218,32 @@ class XBeeHandler:
         if self.garage_temp < self.garage_temp_min:
             self.garage_temp_min = self.garage_temp
 
-        print('Garage temp: {:.2f}'.format(self.garage_temp))
-        s = 'The trap is: ' + self.mouse_trapped
-        print(s)
+        print(f"├── Garage temp: {self.garage_temp:.2f}°C")
+        print(f"└── Mouse trap status: {self.mouse_trapped}")
 
     def _check_node_presence(self):
         """Update values for nodes that haven't reported recently"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         if self.pool_node_cnt > 20:
+            print(f"[{timestamp}] Pool node timeout - resetting values")
             self.pool_node_cnt = 0
             self.pool_temp_out = -99.9
             self.pool_temp_in = -99.9
-            # Note: pool_temp_south not reset as per original code
             
         if self.glassroom_node_cnt > 20:
+            print(f"[{timestamp}] Glass room node timeout - resetting values")
             self.glassroom_node_cnt = 0
             self.glassroom_temp = -99.9
             self.glassroom_north = -99.9
             
         if self.livingroom_node_cnt > 20:
+            print(f"[{timestamp}] Living room node timeout - resetting values")
             self.livingroom_node_cnt = 0
             self.indoor_temp = -99.9
             
         if self.garage_node_cnt > 20:
+            print(f"[{timestamp}] Garage node timeout - resetting values")
             self.garage_node_cnt = 0
             self.garage_temp = -99.9
             self.mouse_trapped = "Trip"
@@ -247,7 +280,8 @@ class XBeeHandler:
 
     def clear_minmax(self):
         """Reset min/max values to current readings"""
-        print('minmax clear')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Clearing min/max values")
         self.pool_temp_out_max = self.pool_temp_out          
         self.pool_temp_out_min = self.pool_temp_out
         self.pool_temp_in_max = self.pool_temp_in        

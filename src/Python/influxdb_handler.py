@@ -1,15 +1,9 @@
 # influxdb_handler.py
 from influxdb import InfluxDBClient
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Tuple, List
 from datetime import datetime
 
 class InfluxDBHandler:
-    # Time formats
-    TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
-    
-    # Valid time intervals for grouping
-    VALID_TIME_INTERVALS = ['1m', '5m', '10m', '15m', '30m', '1h', '6h', '12h', '1d', '7d', '30d']
-    
     def __init__(self, host: str = 'localhost', port: int = 8086, database: str = 'energy_monitoring'):
         """Initialize InfluxDB connection and handler"""
         self.client = InfluxDBClient(
@@ -18,127 +12,21 @@ class InfluxDBHandler:
             database=database
         )
         self.database = database
-        
-        # Define allowed measurements and their fields
-        self.allowed_measurements = {
-            'energy_usage': ['power_usage_w', 'import_kwh', 'export_kwh', 
-                           'l1_power', 'l1_voltage', 'l1_current',
-                           'l2_power', 'l2_voltage', 'l2_current',
-                           'l3_power', 'l3_voltage', 'l3_current'],
-            'temperature_sensors': ['indoor_temp', 'outdoor_north_temp', 
-                                  'outdoor_south_temp', 'glassroom_temp',
-                                  'pool_temp', 'pool_heat_temp', 'garage_temp',
-                                  'mouse_trap_status'],
-            'electricity_price': ['price']
-        }
-        
-        # Define allowed functions and operators
-        self.allowed_functions = ['mean', 'sum', 'count', 'min', 'max', 'last', 'difference']
-        self.allowed_operators = ['DIFFERENCE', 'LAST']
 
-    def validate_query_params(self, params: Dict[str, Any]) -> Tuple[bool, str]:
-        """Validate query parameters for security and correctness"""
-        # Check required fields
-        required_fields = ['measurement', 'fields', 'time_range']
-        if not all(field in params for field in required_fields):
-            return False, "Missing required fields"
-
-        # Validate measurement
-        if params['measurement'] not in self.allowed_measurements:
-            return False, f"Invalid measurement. Allowed: {list(self.allowed_measurements.keys())}"
-
-        # Validate group_by if present
-        if 'group_by' in params and params['group_by'] not in self.VALID_TIME_INTERVALS:
-            return False, f"Invalid group_by interval. Allowed: {self.VALID_TIME_INTERVALS}"
-
-        # Validate fields
-        allowed_fields = self.allowed_measurements[params['measurement']]
-        for field in params['fields']:
-            # Handle complex field expressions (e.g., "DIFFERENCE(LAST(field_name))")
-            if any(op in field.upper() for op in self.allowed_operators):
-                try:
-                    field_name = field.split('(')[-1].split(')')[0].strip('"')
-                    if field_name not in allowed_fields:
-                        return False, f"Invalid field in expression: {field_name}"
-                except:
-                    return False, f"Invalid field expression: {field}"
-            # Handle simple function expressions (e.g., "mean(field_name)")
-            elif '(' in field:
-                try:
-                    func = field.split('(')[0].strip().lower()
-                    field_name = field.split('(')[1].split(')')[0].strip()
-                    if func not in self.allowed_functions:
-                        return False, f"Invalid function. Allowed: {self.allowed_functions}"
-                    if field_name not in allowed_fields:
-                        return False, f"Invalid field in function: {field_name}"
-                except:
-                    return False, f"Invalid function format: {field}"
-            # Handle simple fields
-            elif field not in allowed_fields:
-                return False, f"Invalid field. Allowed for {params['measurement']}: {allowed_fields}"
-
-        # Validate time range format
+    def get_hourly_energy_usage(self, start_time: str, end_time: str) -> Tuple[bool, Any]:
+        """Get hourly energy usage for specified time range"""
         try:
-            start_time = params['time_range'].get('start')
-            end_time = params['time_range'].get('end')
-            if not (start_time and end_time):
-                return False, "Missing start or end time"
-            # Optionally validate time string format
-            datetime.strptime(start_time.split('.')[0], self.TIME_FORMAT)
-            datetime.strptime(end_time.split('.')[0], self.TIME_FORMAT)
-        except ValueError as e:
-            return False, f"Invalid time format. Expected {self.TIME_FORMAT}: {str(e)}"
-        except Exception:
-            return False, "Invalid time range format"
-
-        return True, ""
-
-    def build_query(self, params: Dict[str, Any]) -> str:
-        """Build InfluxDB query from parameters"""
-        # Build SELECT clause
-        select_clause = "SELECT " + ", ".join(params['fields'])
-        from_clause = f"FROM {params['measurement']}"
-        
-        # Build WHERE clause
-        where_conditions = [
-            f"time >= '{params['time_range']['start']}'",
-            f"time <= '{params['time_range']['end']}'"
-        ]
-        
-        # Add any additional filters
-        if 'filters' in params:
-            for field, value in params['filters'].items():
-                if field in self.allowed_measurements[params['measurement']]:
-                    where_conditions.append(f"{field} = '{value}'")
-        
-        where_clause = "WHERE " + " AND ".join(where_conditions)
-        
-        # Add group by if specified
-        group_clause = ""
-        if 'group_by' in params:
-            group_clause = f"GROUP BY time({params['group_by']})"
-        
-        # Combine all clauses
-        return f"{select_clause} {from_clause} {where_clause} {group_clause}"
-
-    def execute_query(self, query_params: Dict[str, Any]) -> Tuple[bool, Any]:
-        """Execute a validated query and return results"""
-        try:
-            # Validate parameters
-            is_valid, error_message = self.validate_query_params(query_params)
-            if not is_valid:
-                return False, error_message
-
-            # Build and execute query
-            query = self.build_query(query_params)
+            query = f"""
+                SELECT DIFFERENCE(LAST("import_kwh")) as hourly_usage 
+                FROM energy_usage 
+                WHERE time >= '{start_time}' AND time <= '{end_time}' 
+                GROUP BY time(1h)
+            """
             result = self.client.query(query)
-
-            # Format response
-            response_data = list(result.get_points())
-            return True, response_data
-
+            return True, list(result.get_points())
         except Exception as e:
             return False, f"Query execution failed: {str(e)}"
+
     def store_energy_data(self, data: Dict[str, Any]) -> bool:
         """Store HomeWizard energy data in InfluxDB"""
         try:
@@ -174,7 +62,6 @@ class InfluxDBHandler:
     def store_sensor_data(self, data: Dict[str, Any]) -> bool:
         """Store sensor data in InfluxDB, converting -99.9 values to None"""
         try:
-            # Convert string values to float and check for -99.9
             fields = {
                 "indoor_temp": None if float(data['indoor']) == -99.9 else float(data['indoor']),
                 "outdoor_north_temp": None if float(data['Outdoor north']) == -99.9 else float(data['Outdoor north']),

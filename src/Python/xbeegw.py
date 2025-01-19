@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import time
+import json
 
 from influxdb_handler import InfluxDBHandler
 from homewizard_handler import HomeWizardHandler
@@ -16,7 +17,113 @@ PUBNUB_CHANNEL = 'RpiGate'
 DEFAULT_PRICE_REGION = "SE3"
 
 class Gateway:
+    def handle_pubnub_message(self, message):
+        """Handle incoming PubNub messages"""
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # If message is a string, try to parse it as JSON
+            if isinstance(message, str):
+                try:
+                    # Remove "Copy" if present and any leading/trailing whitespace
+                    clean_message = message.replace('Copy', '').strip()
+                    message = json.loads(clean_message)
+                    print(f"\n[{timestamp}] Received and parsed message:")
+                except json.JSONDecodeError as e:
+                    print(f"[{timestamp}] Failed to parse message as JSON:")
+                    print(f"└── Error: {str(e)}")
+                    return
+            else:
+                print(f"\n[{timestamp}] Received message:")
+
+            if not isinstance(message, dict):
+                print(f"└── Error: Skipping non-dict message of type {type(message)}")
+                return
+
+            msg_type = message.get('type')
+            query_type = message.get('query_type')
+
+            print(f"├── Message Type: {msg_type}")
+            print(f"└── Query Type: {query_type if query_type else 'N/A'}")
+
+            if msg_type == 'query_request' and query_type == 'hourly_energy':
+                response_channel = message.get('response_channel', 'RpiGate')
+                day_offset = message.get('day_offset', 0)
+                
+                print(f"[{timestamp}] Processing hourly energy query:")
+                print(f"├── Day Offset: {day_offset}")
+                print(f"└── Response Channel: {response_channel}")
+                
+                # Calculate time range for the query
+                today = datetime.now()
+                start_time = (today - timedelta(days=day_offset)).strftime('%Y-%m-%dT00:00:00Z')
+                end_time = (today - timedelta(days=day_offset-1)).strftime('%Y-%m-%dT00:00:00Z')
+                
+                print(f"[{timestamp}] Query time range:")
+                print(f"├── Start: {start_time}")
+                print(f"└── End: {end_time}")
+                
+                # Execute query
+                success, result = self.influx_handler.get_hourly_energy_usage(start_time, end_time)
+                
+                if success:
+                    # Format the response
+                    hourly_data = []
+                    total_usage = 0
+                    
+                    for point in result:
+                        if point.get('hourly_usage') is not None:
+                            point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                            usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
+                            total_usage += usage
+                            hourly_data.append({
+                                'hour': point_time.hour,
+                                'datetime': point_time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                                'usage_kwh': usage
+                            })
+                    
+                    response = {
+                        'Channel': response_channel,
+                        'data_type': 'hourly_energy_import',
+                        'day_offset': day_offset,
+                        'hourly_usage': hourly_data,
+                        'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+
+                    print(f"[{timestamp}] Query results:")
+                    print(f"├── Data Points: {len(hourly_data)}")
+                    if hourly_data:
+                        print(f"├── Time Range: {hourly_data[0]['datetime']} to {hourly_data[-1]['datetime']}")
+                        print(f"├── Total Usage: {round(total_usage, 2)} kWh")
+                        print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2)} kWh")
+                    else:
+                        print(f"└── No data points found")
+                else:
+                    response = {
+                        'Channel': response_channel,
+                        'data_type': 'hourly_energy_import',
+                        'status': 'error',
+                        'error': result,
+                        'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                    print(f"[{timestamp}] Query error:")
+                    print(f"└── {result}")
+                
+                self.pubnub_handler.publish_data(response, response_channel)
+                
+            elif message == 'Connected':
+                print(f"[{timestamp}] New client connected - publishing current data")
+                current_data = self.xbee_handler.get_current_data()
+                self.pubnub_handler.publish_data(current_data)
+                
+        except Exception as e:
+            print(f"[{timestamp}] Error handling message:")
+            print(f"└── Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
     def __init__(self):
+        """Initialize Gateway"""
         # Initialize all handlers
         self.influx_handler = InfluxDBHandler(**INFLUX_CONFIG)
         self.homewizard_handler = HomeWizardHandler(HOMEWIZARD_CONFIG['device_ip'])
@@ -38,101 +145,16 @@ class Gateway:
         # Initial electricity price fetch
         self.fetch_electricity_prices()
 
-    def _convert_legacy_hourly_query(self, day_offset: int) -> Dict[str, Any]:
-        """Convert legacy hourly energy query to new format"""
-        today = datetime.now()
-        return {
-            'measurement': 'energy_usage',
-            'fields': ['DIFFERENCE(LAST("import_kwh")) as hourly_usage'],
-            'time_range': {
-                'start': (today - timedelta(days=day_offset)).strftime('%Y-%m-%dT00:00:00Z'),
-                'end': (today - timedelta(days=day_offset-1)).strftime('%Y-%m-%dT00:00:00Z')
-            },
-            'group_by': '1h'
-        }
-
-    def _format_legacy_response(self, result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Format query result to match legacy response structure"""
-        hourly_data = []
-        for point in result:
-            if point.get('hourly_usage') is not None:
-                timestamp = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
-                hourly_data.append({
-                    'hour': timestamp.hour,
-                    'datetime': timestamp.isoformat(),
-                    'usage_kwh': round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
-                })
-        return hourly_data
-
-    def handle_pubnub_message(self, message):
-        """Handle incoming PubNub messages"""
-        try:
-            if not isinstance(message, dict):
-                return
-
-            if message.get('type') == 'query_request':
-                response_channel = message.get('response_channel', 'RpiGate')
-                query_type = message.get('query_type')
-                
-                if query_type == 'database_query':
-                    query_params = message.get('query_params', {})
-                    success, result = self.influx_handler.execute_query(query_params)
-                    
-                    response = {
-                        'Channel': response_channel,
-                        'data_type': 'query_response',
-                        'status': 'success' if success else 'error',
-                        'data' if success else 'error': result,
-                        'query_params': query_params,
-                        'timestamp': datetime.now().isoformat()
-                    }
-                    
-                    self.pubnub_handler.publish_data(response, response_channel)
-                    
-                elif query_type == 'hourly_energy':
-                    # Handle legacy hourly energy query
-                    day_offset = message.get('day_offset', 0)
-                    query_params = self._convert_legacy_hourly_query(day_offset)
-                    success, result = self.influx_handler.execute_query(query_params)
-                    
-                    if success:
-                        hourly_data = self._format_legacy_response(result)
-                        response = {
-                            'Channel': response_channel,
-                            'data_type': 'hourly_energy_import',
-                            'day_offset': day_offset,
-                            'hourly_usage': hourly_data,
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    else:
-                        response = {
-                            'Channel': response_channel,
-                            'data_type': 'hourly_energy_import',
-                            'status': 'error',
-                            'error': result
-                        }
-                    
-                    self.pubnub_handler.publish_data(response, response_channel)
-                    
-            elif message == 'Connected':
-                print('Connected! Publishing current data...')
-                current_data = self.xbee_handler.get_current_data()
-                self.pubnub_handler.publish_data(current_data)
-                
-        except Exception as e:
-            print(f"Error handling PubNub message: {e}")
-            import traceback
-            traceback.print_exc()
-
     def fetch_electricity_prices(self):
         """Fetch and store electricity prices"""
-        print('Fetching electricity prices')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"\n[{timestamp}] Fetching electricity prices")
         prices = get_electricity_prices(price_region=DEFAULT_PRICE_REGION)
         if prices and self.influx_handler.store_electricity_prices(prices):
             self.last_price_fetch = datetime.now()
-            print("Electricity prices stored successfully")
+            print(f"[{timestamp}] Electricity prices stored successfully")
         else:
-            print("Failed to fetch/store electricity prices, will retry at next scheduled time")
+            print(f"[{timestamp}] Failed to fetch/store electricity prices, will retry at next scheduled time")
 
     def check_and_update_prices(self, current_time):
         """Check if prices need to be updated and fetch if necessary"""
@@ -143,22 +165,31 @@ class Gateway:
 
     def process_and_store_sensor_data(self):
         """Process and store sensor data from XBee"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sensor_data = self.xbee_handler.get_current_data()
-        print('Publishing sensor data!')
-        self.pubnub_handler.publish_data(sensor_data)
+        print(f"\n[{timestamp}] Processing sensor data update")
+        self.pubnub_handler.publish_data({
+            **sensor_data,
+            'data_type': 'sensor_update',
+            'timestamp': datetime.now().isoformat()
+        })
         self.influx_handler.store_sensor_data(sensor_data)
 
     def process_and_store_energy_data(self):
         """Process and store energy data from HomeWizard"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         energy_data = self.homewizard_handler.process_data()
         if energy_data:
-            print("Power usage:", energy_data['power_usage']['current_usage_w'], "W")
-            print("Import:", energy_data['power_usage']['import_kwh'], "kWh")
-            print("Export:", energy_data['power_usage']['export_kwh'], "kWh")
+            print(f"\n[{timestamp}] Processing energy data:")
+            print(f"├── Power Usage: {energy_data['power_usage']['current_usage_w']} W")
+            print(f"├── Import: {energy_data['power_usage']['import_kwh']} kWh")
+            print(f"└── Export: {energy_data['power_usage']['export_kwh']} kWh")
             self.influx_handler.store_energy_data(energy_data)
 
     def run(self):
         """Main gateway loop"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Starting Gateway main loop")
         try:
             while True:
                 current_time = datetime.now()
@@ -175,7 +206,8 @@ class Gateway:
                 self.process_and_store_energy_data()
                                         
         except KeyboardInterrupt:
-            print("\nShutting down...")
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"\n[{timestamp}] Shutting down...")
         finally:
             self.cleanup()
 

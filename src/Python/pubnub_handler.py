@@ -1,20 +1,26 @@
+# pubnub_handler.py
 from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
 from pubnub.callbacks import SubscribeCallback
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 class PubNubHandler:
     def __init__(self, subscribe_key: str, publish_key: str, user_id: str, message_callback=None):
-        self.pnconfig = PNConfiguration()
-        self.pnconfig.subscribe_key = subscribe_key
-        self.pnconfig.publish_key = publish_key
-        self.pnconfig.user_id = user_id
-        self.message_callback = message_callback
-        
-        self.pubnub = PubNub(self.pnconfig)
-        # Create callback instance with reference to self
-        self.pubnub.add_listener(self.MySubscribeCallback(self))
-        self.pubnub.subscribe().channels('RpiGate').execute()
+        try:
+            self.pnconfig = PNConfiguration()
+            self.pnconfig.subscribe_key = subscribe_key
+            self.pnconfig.publish_key = publish_key
+            self.pnconfig.user_id = user_id
+            self.message_callback = message_callback
+            
+            self.pubnub = PubNub(self.pnconfig)
+            self.pubnub.add_listener(self.MySubscribeCallback(self))
+            self.pubnub.subscribe().channels('RpiGate').execute()
+        except Exception as e:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error initializing PubNub:")
+            print(f"└── Error: {str(e)}")
+            raise
 
     class MySubscribeCallback(SubscribeCallback):
         def __init__(self, handler):
@@ -28,22 +34,38 @@ class PubNubHandler:
             pass
 
         def message(self, pubnub, message):
-            print(f"Received message: {message.message}")  # Debug print
-            if self.handler.message_callback:
-                print("Calling message callback")  # Debug print
-                self.handler.message_callback(message.message)
-            elif message.message == 'Connected':
-                print('hello client')
-                print('Connected! Publish data')
-            else:
-                print(f"Unhandled message: {message.message}")  # Debug print
+            try:
+                # Just forward the message to the callback without logging here
+                if self.handler.message_callback:
+                    self.handler.message_callback(message.message)
+                elif message.message == 'Connected':
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"[{timestamp}] New client connected - sending current data")
+                    
+            except Exception as e:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                print(f"[{timestamp}] Error in PubNub message handler:")
+                print(f"└── Error: {str(e)}")
 
     def publish_data(self, data: Dict[str, Any], channel: str = 'RpiGate'):
         """Publish data to PubNub channel"""
         def publish_callback(result, status):
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             if not status.is_error():
-                print(f'Message published successfully to {channel}')
+                msg_type = data.get('data_type', 'regular_update')
+                print(f"\n[{timestamp}] PubNub Publish Success:")
+                print(f"├── Channel: {channel}")
+                print(f"├── Message Type: {msg_type}")
+                print(f"└── Timetoken: {result.timetoken}")
             else:
-                print(f'Publish failed to {channel}: {status.error}')
+                print(f"\n[{timestamp}] PubNub Publish Error:")
+                print(f"├── Channel: {channel}")
+                print(f"└── Error: {status.error}")
 
-        self.pubnub.publish().channel(channel).message(data).pn_async(publish_callback)
+        try:
+            self.pubnub.publish().channel(channel).message(data).pn_async(publish_callback)
+        except Exception as e:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] Error publishing to PubNub:")
+            print(f"├── Channel: {channel}")
+            print(f"└── Error: {str(e)}")

@@ -8,7 +8,7 @@
 {
     "type": "query_request",
     "query_type": "hourly_energy",
-    "day_offset": 1,
+    "day_offset": 0,
     "response_channel": "Channel-Query"
 }
 
@@ -26,3 +26,6 @@
         "group_by": "1h"
     }
 }
+
+
+{"type":"query_request","query_type":"database_query","response_channel":"Channel-Query","query_params":{"measurement":"energy_usage","fields":["DIFFERENCE(LAST(\"import_kwh\")) as hourly_usage"],"time_range":{"start":"2025-01-18T00:00:00Z","end":"2025-01-19T00:00:00Z"},"group_by":"1h"}}
