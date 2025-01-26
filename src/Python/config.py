@@ -30,8 +30,17 @@ def get_xbee_config() -> Dict[str, Any]:
         'baud_rate': int(os.getenv('XBEE_BAUD_RATE', '9600'))
     }
 
+def get_gateway_config() -> Dict[str, Any]:
+    """Get Gateway configuration from environment variables or defaults"""
+    return {
+        'timezone_offset': int(os.getenv('TIMEZONE_OFFSET_HOURS', '1')),  # UTC+1
+        'update_interval': int(os.getenv('UPDATE_INTERVAL_SECONDS', '60')),
+        'price_update_hour': int(os.getenv('PRICE_UPDATE_HOUR', '1'))
+    }
+
 # Export configurations
 INFLUX_CONFIG = get_influx_config()
 HOMEWIZARD_CONFIG = get_homewizard_config()
 PUBNUB_CONFIG = get_pubnub_config()
 XBEE_CONFIG = get_xbee_config()
+GATEWAY_CONFIG = get_gateway_config()

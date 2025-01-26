@@ -10,7 +10,7 @@ from xbee_handler import XBeeHandler
 from pubnub_handler import PubNubHandler
 from electricityprices_handler import get_electricity_prices
 from config import (INFLUX_CONFIG, HOMEWIZARD_CONFIG, 
-                   PUBNUB_CONFIG, XBEE_CONFIG)
+                   PUBNUB_CONFIG, XBEE_CONFIG, GATEWAY_CONFIG)
 
 # Constants
 PUBNUB_CHANNEL = 'RpiGate'
@@ -56,7 +56,7 @@ class Gateway:
                 
                 # Calculate time range for the query
                 today = datetime.now()
-                local_offset = timedelta(hours=1)  # UTC+1
+                local_offset = timedelta(hours=self.timezone_offset)
                 
                 # Start from local midnight (00:00) and convert to UTC
                 local_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -136,7 +136,6 @@ class Gateway:
             XBEE_CONFIG['serial_port'], 
             XBEE_CONFIG['baud_rate']
         )
-        # Initialize PubNub with the message handler
         self.pubnub_handler = PubNubHandler(
             subscribe_key=PUBNUB_CONFIG['subscribe_key'],
             publish_key=PUBNUB_CONFIG['publish_key'],
@@ -144,8 +143,14 @@ class Gateway:
             message_callback=self.handle_pubnub_message
         )
         
+        # Store configuration values
+        self.update_interval = GATEWAY_CONFIG['update_interval']
+        self.timezone_offset = GATEWAY_CONFIG['timezone_offset']
+        self.price_update_hour = GATEWAY_CONFIG['price_update_hour']
+        
         self.last_price_fetch = None
         print('Starting Up ZigBee Gateway!')
+        print(f'Configuration: UTC+{self.timezone_offset}, Update interval: {self.update_interval}s')
         
         # Initial electricity price fetch
         self.fetch_electricity_prices()
@@ -202,8 +207,8 @@ class Gateway:
                 # Check if we need to fetch new prices
                 self.check_and_update_prices(current_time)
                 
-                # Wait for 60 seconds while collecting data
-                for _ in range(60):
+                # Wait for update_interval seconds while collecting data
+                for _ in range(self.update_interval):
                     time.sleep(1)
                 
                 # Process and store all data
