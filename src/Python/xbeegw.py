@@ -56,29 +56,32 @@ class Gateway:
                 
                 # Calculate time range for the query
                 today = datetime.now()
-                start_time = (today - timedelta(days=day_offset)).strftime('%Y-%m-%dT00:00:00Z')
-                end_time = (today - timedelta(days=day_offset-1)).strftime('%Y-%m-%dT00:00:00Z')
+                local_offset = timedelta(hours=1)  # UTC+1
                 
-                print(f"[{timestamp}] Query time range:")
-                print(f"├── Start: {start_time}")
-                print(f"└── End: {end_time}")
+                # Start from local midnight (00:00) and convert to UTC
+                local_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+                local_end = (local_start + timedelta(days=1))
                 
-                # Execute query
-                success, result = self.influx_handler.get_hourly_energy_usage(start_time, end_time)
+                # Convert local times to UTC for query
+                utc_start = (local_start - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+                utc_end = (local_end - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+                
+                success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
                 
                 if success:
-                    # Format the response
                     hourly_data = []
                     total_usage = 0
                     
                     for point in result:
                         if point.get('hourly_usage') is not None:
                             point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                            # Adjust the hour to local time
+                            local_time = point_time + local_offset
                             usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
                             total_usage += usage
                             hourly_data.append({
-                                'hour': point_time.hour,
-                                'datetime': point_time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                                'hour': local_time.hour,
+                                'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),  # Note: Now using +01:00
                                 'usage_kwh': usage
                             })
                     
@@ -114,7 +117,9 @@ class Gateway:
             elif message == 'Connected':
                 print(f"[{timestamp}] New client connected - publishing current data")
                 current_data = self.xbee_handler.get_current_data()
-                self.pubnub_handler.publish_data(current_data)
+                # Get the channel from the original message's context or use a specific channel
+                response_channel = message.get('response_channel', 'RpiGate')
+                self.pubnub_handler.publish_data(current_data, response_channel)
                 
         except Exception as e:
             print(f"[{timestamp}] Error handling message:")
