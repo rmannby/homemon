@@ -120,52 +120,76 @@ const renderChart = (labels, data) => {
             }
         }
     } : {};
-
-    chartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Vattenfall-timpris (SEK/kWh)',
-                data: data,
-                borderColor: 'rgba(2, 169, 231, 1)',
-                backgroundColor: labels.map(label => {
-                    const isTomorrow = data === pricesTomorrow;
-                    return (!isTomorrow && label === `${new Date().getHours()}:00`) 
-                        ? 'rgba(255, 99, 132, 0.6)'  // Highlighted red for current hour
-                        : 'rgba(2, 169, 231, 0.2)';  // Default blue
-                }),
-                borderWidth: 1,
-                categoryPercentage: 0.95,
-                barPercentage: 0.95
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { position: 'top' },
-                title: { display: true, text: 'El-spotpris' },
-                annotation: {
-                    annotations: annotations
-                }
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels, // Changed from 'hours' to 'labels'
+                datasets: [{
+                    label: 'Elpris (öre/kWh)',
+                    data: data,
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                }, {
+                    label: 'Förbrukning (kWh)',
+                    data: [],
+                    type: 'line',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    yAxisID: 'y1'
+                }]
             },
-            scales: {
-                y: {
-                    title: { display: true, text: 'SEK/kWh' },
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    }
-                }
-            }
-        }    
+          options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                  legend: { position: 'top' },
+                  title: { display: true, text: 'El-spotpris' },
+                  annotation: {
+                      annotations: annotations
+                  }
+              },
+              scales: {
+                  y: {
+                      type: 'linear',
+                      position: 'left',
+                      title: { display: true, text: 'SEK/kWh' },
+                      grid: {
+                          color: 'rgba(255, 255, 255, 0.1)'
+                      }
+                  },
+                  y1: {
+                      type: 'linear',
+                      position: 'right',
+                      grid: {
+                          drawOnChartArea: false
+                      }
+                  },
+                  x: {
+                      grid: {
+                          color: 'rgba(255, 255, 255, 0.1)'
+                      }
+                  }
+              }
+          }    
+      });
+  };
+    // Add event listener for energy data
+    window.addEventListener('energyDataReceived', function(e) {
+        chartInstance.data.datasets[1].data = e.detail;
+        chartInstance.update();
     });
-};
+
+    // Update price selector handler
+    document.getElementById('priceSelector').addEventListener('change', function() {
+        const selectedValue = parseInt(this.value);
+        if (selectedValue === 2) {
+            queryHourlyEnergy(0);
+        } else {
+            updatePriceChart(selectedValue);
+        }
+    });
 
 const updateChart = async (dayOffset) => {
     if (dayOffset === 0) {
