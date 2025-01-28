@@ -58,13 +58,18 @@ class Gateway:
                 today = datetime.now()
                 local_offset = timedelta(hours=self.timezone_offset)
                 
-                # Start from local midnight (00:00) and convert to UTC
-                local_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
-                local_end = (local_start + timedelta(days=1))
+                # Start from local midnight (00:00) of the requested day
+                local_start = (today - timedelta(days=day_offset)).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                local_end = local_start + timedelta(days=1)
                 
                 # Convert local times to UTC for query
                 utc_start = (local_start - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
                 utc_end = (local_end - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+                
+                print(f"├── Query Start (UTC): {utc_start}")
+                print(f"└── Query End (UTC): {utc_end}")
                 
                 success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
                 
@@ -81,7 +86,7 @@ class Gateway:
                             total_usage += usage
                             hourly_data.append({
                                 'hour': local_time.hour,
-                                'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),  # Note: Now using +01:00
+                                'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
                                 'usage_kwh': usage
                             })
                     
@@ -94,6 +99,7 @@ class Gateway:
                     }
 
                     print(f"[{timestamp}] Query results:")
+                    print(f"├── Day Offset: {day_offset}")
                     print(f"├── Data Points: {len(hourly_data)}")
                     if hourly_data:
                         print(f"├── Time Range: {hourly_data[0]['datetime']} to {hourly_data[-1]['datetime']}")
