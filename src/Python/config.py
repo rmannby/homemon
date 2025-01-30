@@ -35,7 +35,8 @@ def get_gateway_config() -> Dict[str, Any]:
     return {
         'timezone_offset': int(os.getenv('TIMEZONE_OFFSET_HOURS', '1')),  # UTC+1
         'update_interval': int(os.getenv('UPDATE_INTERVAL_SECONDS', '60')),
-        'price_update_hour': int(os.getenv('PRICE_UPDATE_HOUR', '1'))
+        'price_update_hour': int(os.getenv('PRICE_UPDATE_HOUR', '1')),
+        'energy_update_interval': int(os.getenv('ENERGY_UPDATE_INTERVAL', '300'))  # 5 minutes default
     }
 
 # Export configurations

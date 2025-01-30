@@ -92,7 +92,7 @@ class Gateway:
                     
                     response = {
                         'Channel': response_channel,
-                        'data_type': 'hourly_energy_import',
+                        'data_type': 'hourly_energy_update',  # Changed from 'hourly_energy_import'
                         'day_offset': day_offset,
                         'hourly_usage': hourly_data,
                         'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -153,13 +153,68 @@ class Gateway:
         self.update_interval = GATEWAY_CONFIG['update_interval']
         self.timezone_offset = GATEWAY_CONFIG['timezone_offset']
         self.price_update_hour = GATEWAY_CONFIG['price_update_hour']
+        self.energy_update_interval = GATEWAY_CONFIG['energy_update_interval']
         
+        # Initialize tracking variables
         self.last_price_fetch = None
+        self.last_energy_update = None
+        
         print('Starting Up ZigBee Gateway!')
         print(f'Configuration: UTC+{self.timezone_offset}, Update interval: {self.update_interval}s')
+        print(f'Energy update interval: {self.energy_update_interval}s')
         
-        # Initial electricity price fetch
+        # Initial data fetches
         self.fetch_electricity_prices()
+        self.publish_current_day_energy()  # Add initial energy data publish
+        
+    def publish_current_day_energy(self):
+        """Fetch and publish current day's hourly energy data"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"\n[{timestamp}] Publishing current day energy data")
+        
+        # Calculate time range for today
+        local_offset = timedelta(hours=self.timezone_offset)
+        local_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        local_end = datetime.now()
+        
+        # Convert to UTC for query
+        utc_start = (local_start - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+        utc_end = (local_end - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
+        
+        if success:
+            hourly_data = []
+            total_usage = 0
+            
+            for point in result:
+                if point.get('hourly_usage') is not None:
+                    point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                    local_time = point_time + local_offset
+                    usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
+                    total_usage += usage
+                    hourly_data.append({
+                        'hour': local_time.hour,
+                        'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
+                        'usage_kwh': usage
+                    })
+            
+            response = {
+                'Channel': 'Channel-Query',
+                'data_type': 'hourly_energy_update',  # New data type for automatic updates
+                'day_offset': 0,
+                'hourly_usage': hourly_data,
+                'total_usage': round(total_usage, 2),
+                'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+            
+            print(f"[{timestamp}] Publishing energy update:")
+            print(f"├── Data Points: {len(hourly_data)}")
+            print(f"├── Total Usage: {round(total_usage, 2)} kWh")
+            print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2) if hourly_data else 0} kWh")
+            
+            self.pubnub_handler.publish_data(response, 'Channel-Query')
+            self.last_energy_update = datetime.now()
 
     def fetch_electricity_prices(self):
         """Fetch and store electricity prices"""
@@ -213,6 +268,14 @@ class Gateway:
                 # Check if we need to fetch new prices
                 self.check_and_update_prices(current_time)
                 
+                # Check if we need to publish energy update
+                if self.last_energy_update is None:
+                    print(f"[{timestamp}] No previous energy update, publishing...")
+                    self.publish_current_day_energy()
+                elif (current_time - self.last_energy_update).total_seconds() >= self.energy_update_interval:
+                    print(f"[{timestamp}] Energy update interval reached ({self.energy_update_interval}s), publishing...")
+                    self.publish_current_day_energy()
+                
                 # Wait for update_interval seconds while collecting data
                 for _ in range(self.update_interval):
                     time.sleep(1)
@@ -220,7 +283,7 @@ class Gateway:
                 # Process and store all data
                 self.process_and_store_sensor_data()
                 self.process_and_store_energy_data()
-                                        
+                
         except KeyboardInterrupt:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"\n[{timestamp}] Shutting down...")

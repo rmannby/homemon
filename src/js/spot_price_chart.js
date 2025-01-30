@@ -166,6 +166,7 @@ const renderChart = (labels, data) => {
                   y1: {
                       type: 'linear',
                       position: 'right',
+                      title: { display: true, text: 'kWh' },
                       grid: {
                           drawOnChartArea: false
                       }

@@ -10,52 +10,46 @@ let minMax = {} //Save min/max object
 let pubnubInstance; // Declare variable to hold PubNub instance
 
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('Document ready');
-    
-    // Initialize PubNub
-    pubnubInstance = PUBNUB.init({
-        subscribe_key: 'sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe',
-        publish_key: 'pub-c-6a121d53-b962-4a48-b425-10281417b24d',
-        uuid: 'mannbyUUID',
-        ssl: true
-    });
-    
-    // Subscribe to RpiGate channel
-    pubnubInstance.subscribe({
-        channel: 'RpiGate',  // Changed from channels array to single channel
-        message: function(message, env, channel) {  // Old version callback format
-            if (message && message.data_type === 'hourly_energy_import') {
-                const usageData = message.hourly_usage.map(hour => hour.usage_kwh);
-                const event = new CustomEvent('energyDataReceived', { 
-                    detail: usageData 
-                });
-                window.dispatchEvent(event);
-            } else {
-                updateDOM(message);
-            }
-        },
-        connect: function() {  // Changed to function instead of arrow function
-            console.log('PubNub RpiGate channel connected');
-            pubnubInstance.publish({
-                channel: 'RpiGate',
-                message: 'Connected'
-            });
-        }
-    });
-
-    // Subscribe to Query channel separately
-    pubnubInstance.subscribe({
-        channel: 'Channel-Query',
-        message: function(message, env, channel) {
-            if (message && message.data_type === 'hourly_energy_import') {
-                const usageData = message.hourly_usage.map(hour => hour.usage_kwh);
-                const event = new CustomEvent('energyDataReceived', { 
-                    detail: usageData 
-                });
-                window.dispatchEvent(event);
-            }
-        }
-    });
+  console.log('Document ready');
+  
+  // Initialize PubNub
+  pubnubInstance = PUBNUB.init({
+      subscribe_key: 'sub-c-9e12300c-4af3-11e7-bf50-02ee2ddab7fe',
+      publish_key: 'pub-c-6a121d53-b962-4a48-b425-10281417b24d',
+      uuid: 'mannbyUUID',
+      ssl: true
+  });
+  
+  // Subscribe to both channels using comma-separated string
+  pubnubInstance.subscribe({
+      channel: 'RpiGate,Channel-Query',  // Old version format
+      message: function(message, env, channel) {
+          console.log('Received message:', message, 'on channel:', channel);
+          
+          // Handle both types of energy updates
+          if (message && (message.data_type === 'hourly_energy_import' || 
+                        message.data_type === 'hourly_energy_update')) {
+              console.log('Processing energy data:', message);
+              const usageData = message.hourly_usage.map(hour => hour.usage_kwh);
+              const event = new CustomEvent('energyDataReceived', { 
+                  detail: usageData 
+              });
+              window.dispatchEvent(event);
+          } else {
+              updateDOM(message);
+          }
+      },
+      connect: function() {
+          console.log('PubNub channels connected');
+          pubnubInstance.publish({
+              channel: 'RpiGate',
+              message: 'Connected'
+          });
+      },
+      error: function(err) {
+          console.error('PubNub error:', err);
+      }
+  });
 });
 
 // Make queryHourlyEnergy wait for pubnubInstance to be available

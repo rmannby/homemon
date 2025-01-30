@@ -52,14 +52,12 @@ class PubNubHandler:
         def publish_callback(result, status):
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             if not status.is_error():
-                msg_type = data.get('data_type', 'regular_update')
-                print(f"\n[{timestamp}] PubNub Publish Success:")
-                print(f"├── Channel: {channel}")
-                print(f"├── Message Type: {msg_type}")
+                print(f"\n[{timestamp}] PubNub Energy Update Published Successfully:")
+                print(f"├── Channel: Channel-Query")
                 print(f"└── Timetoken: {result.timetoken}")
             else:
                 print(f"\n[{timestamp}] PubNub Publish Error:")
-                print(f"├── Channel: {channel}")
+                print(f"├── Channel: Channel-Query")
                 print(f"└── Error: {status.error}")
 
         try:
