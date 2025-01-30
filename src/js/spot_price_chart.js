@@ -125,27 +125,26 @@ const renderChart = (labels, data) => {
             data: {
                 labels: labels, // Changed from 'hours' to 'labels'
                 datasets: [{
-                    label: 'Elpris (öre/kWh)',
+                    label: 'Elpris (SEK/kWh)',
                     data: data,
                     backgroundColor: labels.map(label => {
-                        const isTomorrow = data === pricesTomorrow
+                        const isTomorrow = data === pricesTomorrow;
                         return (!isTomorrow && label === `${new Date().getHours()}:00`)
-                            ? 'rgba(255, 99, 132, 0.6)'  // Highlighted red for current hour
-                            : 'rgba(2, 169, 231, 0.2)';  // Default blue
+                            ? 'rgba(255, 99, 132, 0.6)'  
+                            : 'rgba(2, 169, 231, 0.2)';  
                     }),
                     borderColor: 'rgba(2, 169, 231, 1)',
                     borderWidth: 1,
                     yAxisID: 'y'
                 }, {
-                    label: 'Förbrukning (kWh)',
-                    data: [],
+                    label: 'Förbrukning (kWh)', 
+                    data: [], // Will be populated by energyDataReceived event
                     type: 'line',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
                     yAxisID: 'y1'
                 }]
-            },
-          options: {
+            },          options: {
               responsive: true,
               maintainAspectRatio: true,
               plugins: {
@@ -185,16 +184,11 @@ const renderChart = (labels, data) => {
         chartInstance.data.datasets[1].data = e.detail;
         chartInstance.update();
     });
-
-    // Update price selector handler
-    document.getElementById('priceSelector').addEventListener('change', function() {
-        const selectedValue = parseInt(this.value);
-        if (selectedValue === 2) {
-            queryHourlyEnergy(0);
-        } else {
-            updatePriceChart(selectedValue);
-        }
-    });
+      // Update price selector handler
+      document.getElementById('priceSelector').addEventListener('change', function() {
+          const selectedValue = parseInt(this.value);
+          updateChart(selectedValue);
+      });
 
 const updateChart = async (dayOffset) => {
     if (dayOffset === 0) {
