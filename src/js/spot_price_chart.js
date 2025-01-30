@@ -127,8 +127,13 @@ const renderChart = (labels, data) => {
                 datasets: [{
                     label: 'Elpris (öre/kWh)',
                     data: data,
-                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: labels.map(label => {
+                        const isTomorrow = data === pricesTomorrow
+                        return (!isTomorrow && label === `${new Date().getHours()}:00`)
+                            ? 'rgba(255, 99, 132, 0.6)'  // Highlighted red for current hour
+                            : 'rgba(2, 169, 231, 0.2)';  // Default blue
+                    }),
+                    borderColor: 'rgba(2, 169, 231, 1)',
                     borderWidth: 1,
                     yAxisID: 'y'
                 }, {
