@@ -52,22 +52,22 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
-// Make queryHourlyEnergy wait for pubnubInstance to be available
-function queryHourlyEnergy(dayOffset) {
-    if (!pubnubInstance) {
-        console.error('PubNub not yet initialized');
-        return;
-    }
-    pubnubInstance.publish({
-        channel: "RpiGate",
-        message: {
-            type: "query_request",
-            query_type: "hourly_energy",
-            day_offset: dayOffset,
-            response_channel: "Channel-Query"
-        }
-    });
-}
+// Make queryHourlyEnergy globally available
+window.queryHourlyEnergy = function(dayOffset) {
+  if (!pubnubInstance) {
+      console.error('PubNub not yet initialized');
+      return;
+  }
+  pubnubInstance.publish({
+      channel: "RpiGate",
+      message: {
+          type: "query_request",
+          query_type: "hourly_energy",
+          day_offset: dayOffset,
+          response_channel: "Channel-Query"
+      }
+  });
+};
 
 function updateDOM(res) {
     if (res.MinMax) {

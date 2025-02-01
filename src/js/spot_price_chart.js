@@ -1,24 +1,28 @@
 // spot_price_chart.js
-let chartInstance = null;
-let pricesToday = [];
-let labelsToday = [];
-let pricesTomorrow = [];
-let labelsTomorrow = [];
 
-// First, let's add a span for the asterisk next to the selector in the HTML
+// Initialize global state
+window.priceChart = {
+    chartInstance: null,
+    pricesToday: [],
+    labelsToday: [],
+    pricesTomorrow: [],
+    labelsTomorrow: [],
+    pricesYesterday: [],
+    labelsYesterday: []
+};
+
 const selector = document.getElementById('priceSelector');
 if (selector) {
     const asterisk = document.createElement('span');
     asterisk.id = 'tomorrowAvailable';
-    asterisk.style.color = '#02A9E7'; // Same blue as the chart
+    asterisk.style.color = '#02A9E7';
     asterisk.style.marginLeft = '10px';
-    asterisk.style.fontSize = '24px'; // Make the asterisk bigger
-    asterisk.style.display = 'none';  // Hidden by default
+    asterisk.style.fontSize = '24px';
+    asterisk.style.display = 'none';
     asterisk.textContent = '*';
     selector.parentNode.insertBefore(asterisk, selector.nextSibling);
 }
 
-// Then modify the fetchElectricityPrices function to update the asterisk visibility
 const fetchElectricityPrices = async (dayOffset = 0) => {
     try {
         const today = new Date();
@@ -33,9 +37,8 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
         
         if (!response.ok) {
             if (response.status === 404) {
-                console.log(`Priser för ${dayOffset === 0 ? 'idag' : 'morgondagen'} är inte tillgängliga (404).`);
+                console.log(`Priser för ${dayOffset === 0 ? 'idag' : dayOffset === 1 ? 'imorgon' : 'igår'} är inte tillgängliga (404).`);
                 if (dayOffset === 1) {
-                    // Hide asterisk if tomorrow's prices aren't available
                     const asterisk = document.getElementById('tomorrowAvailable');
                     if (asterisk) asterisk.style.display = 'none';
                 }
@@ -54,13 +57,15 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
 
         const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53 / 100).toFixed(2));
 
-        if (dayOffset === 0) {
-            labelsToday = labels;
-            pricesToday = prices;
+        if (dayOffset === -1) {
+            window.priceChart.labelsYesterday = labels;
+            window.priceChart.pricesYesterday = prices;
+        } else if (dayOffset === 0) {
+            window.priceChart.labelsToday = labels;
+            window.priceChart.pricesToday = prices;
         } else {
-            labelsTomorrow = labels;
-            pricesTomorrow = prices;
-            // Show asterisk if tomorrow's prices are available
+            window.priceChart.labelsTomorrow = labels;
+            window.priceChart.pricesTomorrow = prices;
             const asterisk = document.getElementById('tomorrowAvailable');
             if (asterisk) asterisk.style.display = 'inline';
         }
@@ -70,7 +75,6 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
         if (dayOffset === 1) {
-            // Hide asterisk on error
             const asterisk = document.getElementById('tomorrowAvailable');
             if (asterisk) asterisk.style.display = 'none';
         }
@@ -92,19 +96,16 @@ const updatePriceStats = (prices) => {
     minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 };
 
-const renderChart = (labels, data) => {
+const renderChart = (labels, data, showConsumption = true) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75;
     const ctx = canvas.getContext('2d');
 
-    if (chartInstance) {
-        chartInstance.destroy();
+    if (window.priceChart.chartInstance) {
+        window.priceChart.chartInstance.destroy();
     }
 
-    // Check if any value is >= 1.5
     const hasHighValues = data.some(value => parseFloat(value) >= 1.5);
-
-    // Create annotations object only if there are high values
     const annotations = hasHighValues ? {
         line1: {
             type: 'line',
@@ -121,136 +122,153 @@ const renderChart = (labels, data) => {
             }
         }
     } : {};
-        chartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels, // Changed from 'hours' to 'labels'
-                datasets: [{
-                    label: 'Elpris (SEK/kWh)',
-                    data: data,
-                    backgroundColor: labels.map(label => {
-                        const isTomorrow = data === pricesTomorrow;
-                        return (!isTomorrow && label === `${new Date().getHours()}:00`)
-                            ? 'rgba(255, 99, 132, 0.6)'  
-                            : 'rgba(2, 169, 231, 0.2)';  
-                    }),
-                    borderColor: 'rgba(2, 169, 231, 1)',
-                    borderWidth: 1,
-                    yAxisID: 'y'
-                }, {
-                    label: 'Förbrukning (kWh)', 
-                    data: [], // Will be populated by energyDataReceived event
-                    type: 'line',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    yAxisID: 'y1'
-                }]
-            },          options: {
-              responsive: true,
-              maintainAspectRatio: true,
-              plugins: {
-                  legend: { position: 'top' },
-                  title: { display: true, text: 'El-spotpris' },
-                  annotation: {
-                      annotations: annotations
-                  }
-              },
-              scales: {
-                  y: {
-                      type: 'linear',
-                      position: 'left',
-                      title: { display: true, text: 'SEK/kWh' },
-                      grid: {
-                          color: 'rgba(255, 255, 255, 0.1)'
-                      }
-                  },
-                  y1: {
-                      type: 'linear',
-                      position: 'right',
-                      title: { display: true, text: 'kWh' },
-                      grid: {
-                          drawOnChartArea: false
-                      }
-                  },
-                  x: {
-                      grid: {
-                          color: 'rgba(255, 255, 255, 0.1)'
-                      }
-                  }
-              }
-          }    
-      });
-  };
-    // Add event listener for energy data
-    window.addEventListener('energyDataReceived', function(e) {
-        const selector = document.getElementById('priceSelector');
-        let energyData = e.detail;
-        // If today's chart is selected, remove the last data point (current hour)
-        if (selector && selector.value === "0" && energyData.length > 0) {
-            energyData = energyData.slice(0, -1);
-        }
-        chartInstance.data.datasets[1].data = energyData;
-        chartInstance.update();
-    });
 
-    // Update price selector handler
-    document.getElementById('priceSelector').addEventListener('change', function() {
-        const selectedValue = parseInt(this.value);
-        updateChart(selectedValue);
-    });
+    const datasets = [{
+        label: 'Elpris (SEK/kWh)',
+        data: data,
+        backgroundColor: labels.map((label, index) => {
+            const hour = parseInt(label);
+            const currentHour = new Date().getHours();
+            return (showConsumption && hour === currentHour) 
+                ? 'rgba(255, 99, 132, 0.6)'  
+                : 'rgba(2, 169, 231, 0.2)';
+        }),
+        borderColor: 'rgba(2, 169, 231, 1)',
+        borderWidth: 1,
+        yAxisID: 'y'
+    }];
 
-    const updateChart = async (dayOffset) => {
-        if (dayOffset === 0) {
-            // Create copies of today's labels and prices without the last element (current hour)
-            const truncatedLabels = labelsToday.slice(0, -1);
-            const truncatedPrices = pricesToday.slice(0, -1);
-            renderChart(truncatedLabels, truncatedPrices);
-            updatePriceStats(truncatedPrices);
-        } else if (dayOffset === 1) {
-            if (pricesTomorrow.length > 0) {
-                renderChart(labelsTomorrow, pricesTomorrow);
-                updatePriceStats(pricesTomorrow);
-            } else {
-                const result = await fetchElectricityPrices(1);
-                if (result) {
-                    renderChart(result.labels, result.prices);
-                    updatePriceStats(result.prices);
-                } else {
-                    console.log("Morgondagens data är fortfarande inte tillgänglig.");
+    if (showConsumption) {
+        datasets.push({
+            label: 'Förbrukning (kWh)',
+            data: [], // Will be populated by energyDataReceived event
+            type: 'line',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            yAxisID: 'y1'
+        });
+    }
+
+    window.priceChart.chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: true, text: 'El-spotpris' },
+                annotation: { annotations }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'SEK/kWh' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: showConsumption, text: 'kWh' },
+                    grid: { drawOnChartArea: false },
+                    display: showConsumption
+                },
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
                 }
             }
         }
-    };
+    });
+};
 
-// Initialize prices and start updates
+window.addEventListener('energyDataReceived', function(e) {
+    const selector = document.getElementById('priceSelector');
+    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
+        let energyData = e.detail;
+        
+        // If today's data, slice off the current hour's consumption
+        const selectedValue = Number(selector.value);
+        if (selectedValue === 0) {  // Today's view
+            const currentHour = new Date().getHours();
+            energyData = energyData.slice(0, currentHour);
+        }
+        
+        window.priceChart.chartInstance.data.datasets[1].data = energyData;
+        window.priceChart.chartInstance.update();
+    }
+});
+
+const updateChart = async (dayOffset) => {
+    // Query energy data for historical days
+    // For InfluxDB: offset 0 = today, offset 1 = yesterday
+    if (dayOffset <= 0) {
+        // Convert price chart offset to InfluxDB offset
+        // -1 (yesterday in price chart) -> 1 (yesterday in InfluxDB)
+        // 0 (today in price chart) -> 0 (today in InfluxDB)
+        const influxOffset = dayOffset === -1 ? 1 : 0;
+        window.queryHourlyEnergy?.(influxOffset);
+    }
+
+    if (dayOffset === -1) {
+        if (window.priceChart.pricesYesterday.length === 0) {
+            const result = await fetchElectricityPrices(-1);
+            if (result) {
+                renderChart(result.labels, result.prices, true);
+                updatePriceStats(result.prices);
+            }
+        } else {
+            renderChart(window.priceChart.labelsYesterday, window.priceChart.pricesYesterday, true);
+            updatePriceStats(window.priceChart.pricesYesterday);
+        }
+    } else     if (dayOffset === 0) {
+        if (window.priceChart.pricesToday.length === 0) {
+            const result = await fetchElectricityPrices(0);
+            if (result) {
+                renderChart(result.labels, result.prices, true);
+                updatePriceStats(result.prices);
+            }
+        } else {
+            renderChart(window.priceChart.labelsToday, window.priceChart.pricesToday, true);
+            updatePriceStats(window.priceChart.pricesToday);
+        }
+    } else if (dayOffset === 1) {
+        if (window.priceChart.pricesTomorrow.length === 0) {
+            const result = await fetchElectricityPrices(1);
+            if (result) {
+                renderChart(result.labels, result.prices, false);
+                updatePriceStats(result.prices);
+            }
+        } else {
+            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false);
+            updatePriceStats(window.priceChart.pricesTomorrow);
+        }
+    }
+};
+
 const initializePrices = async () => {
-    // Fetch both today's and tomorrow's prices immediately
-    await fetchElectricityPrices(0);
-    await fetchElectricityPrices(1);
+    await fetchElectricityPrices(-1); // Yesterday
+    await fetchElectricityPrices(0);  // Today
+    await fetchElectricityPrices(1);  // Tomorrow
     
-    // Render initial chart with today's prices
-    renderChart(labelsToday, pricesToday);
-    updatePriceStats(pricesToday);
+    // Initialize with today's data (value 0)
+    updateChart(0);
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
-    // Initialize immediately
     await initializePrices();
 
-    // Set up periodic updates
     setInterval(async () => {
+        await fetchElectricityPrices(-1);
         await fetchElectricityPrices(0);
         await fetchElectricityPrices(1);
         
-        // Reset selector to today's prices and update chart
         const selector = document.getElementById('priceSelector');
         if (selector) {
-            selector.value = "0";
-            updateChart(0);
+            updateChart(Number(selector.value));
         }
-    }, 30 * 60 * 1000); // Every 30 minutes
+    }, 30 * 60 * 1000);
 
-    // Add event listener to the price selector
     const selector = document.getElementById('priceSelector');
     if (selector) {
         selector.addEventListener('change', (e) => updateChart(Number(e.target.value)));
