@@ -1,3 +1,4 @@
+// spot_price_chart.js
 let chartInstance = null;
 let pricesToday = [];
 let labelsToday = [];
@@ -182,34 +183,44 @@ const renderChart = (labels, data) => {
   };
     // Add event listener for energy data
     window.addEventListener('energyDataReceived', function(e) {
-        chartInstance.data.datasets[1].data = e.detail;
+        const selector = document.getElementById('priceSelector');
+        let energyData = e.detail;
+        // If today's chart is selected, remove the last data point (current hour)
+        if (selector && selector.value === "0" && energyData.length > 0) {
+            energyData = energyData.slice(0, -1);
+        }
+        chartInstance.data.datasets[1].data = energyData;
         chartInstance.update();
     });
-      // Update price selector handler
-      document.getElementById('priceSelector').addEventListener('change', function() {
-          const selectedValue = parseInt(this.value);
-          updateChart(selectedValue);
-      });
 
-const updateChart = async (dayOffset) => {
-    if (dayOffset === 0) {
-        renderChart(labelsToday, pricesToday);
-        updatePriceStats(pricesToday);
-    } else if (dayOffset === 1) {
-        if (pricesTomorrow.length > 0) {
-            renderChart(labelsTomorrow, pricesTomorrow);
-            updatePriceStats(pricesTomorrow);
-        } else {
-            const result = await fetchElectricityPrices(1);
-            if (result) {
-                renderChart(result.labels, result.prices);
-                updatePriceStats(result.prices);
+    // Update price selector handler
+    document.getElementById('priceSelector').addEventListener('change', function() {
+        const selectedValue = parseInt(this.value);
+        updateChart(selectedValue);
+    });
+
+    const updateChart = async (dayOffset) => {
+        if (dayOffset === 0) {
+            // Create copies of today's labels and prices without the last element (current hour)
+            const truncatedLabels = labelsToday.slice(0, -1);
+            const truncatedPrices = pricesToday.slice(0, -1);
+            renderChart(truncatedLabels, truncatedPrices);
+            updatePriceStats(truncatedPrices);
+        } else if (dayOffset === 1) {
+            if (pricesTomorrow.length > 0) {
+                renderChart(labelsTomorrow, pricesTomorrow);
+                updatePriceStats(pricesTomorrow);
             } else {
-                console.log("Morgondagens data är fortfarande inte tillgänglig.");
+                const result = await fetchElectricityPrices(1);
+                if (result) {
+                    renderChart(result.labels, result.prices);
+                    updatePriceStats(result.prices);
+                } else {
+                    console.log("Morgondagens data är fortfarande inte tillgänglig.");
+                }
             }
         }
-    }
-};
+    };
 
 // Initialize prices and start updates
 const initializePrices = async () => {
@@ -237,7 +248,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             selector.value = "0";
             updateChart(0);
         }
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, 30 * 60 * 1000); // Every 30 minutes
 
     // Add event listener to the price selector
     const selector = document.getElementById('priceSelector');
