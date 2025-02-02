@@ -226,14 +226,14 @@ window.addEventListener('energyDataReceived', function(e) {
     }
 });
 
-const updateChart = async (dayOffset) => {    
+const updateChart = async (dayOffset) => {
     // Query energy data for historical days
     if (dayOffset <= 0) {
         const influxOffset = dayOffset === -1 ? 1 : 0;
         window.queryHourlyEnergy?.(influxOffset);
     }
 
-    if (dayOffset === -1) {
+    if (dayOffset === -1) {  // Yesterday
         if (window.priceChart.pricesYesterday.length === 0) {
             const result = await fetchElectricityPrices(-1);
             if (result) {
@@ -244,7 +244,7 @@ const updateChart = async (dayOffset) => {
             renderChart(window.priceChart.labelsYesterday, window.priceChart.pricesYesterday, true, false);
             updatePriceStats(window.priceChart.pricesYesterday);
         }
-    } else if (dayOffset === 0) {
+    } else if (dayOffset === 0) {  // Today
         if (window.priceChart.pricesToday.length === 0) {
             const result = await fetchElectricityPrices(0);
             if (result) {
@@ -255,15 +255,15 @@ const updateChart = async (dayOffset) => {
             renderChart(window.priceChart.labelsToday, window.priceChart.pricesToday, true, true);
             updatePriceStats(window.priceChart.pricesToday);
         }
-    } else if (dayOffset === 1) {
+    } else if (dayOffset === 1) {  // Tomorrow – disable current hour highlighting
         if (window.priceChart.pricesTomorrow.length === 0) {
             const result = await fetchElectricityPrices(1);
             if (result) {
-                renderChart(result.labels, result.prices, false, true);
+                renderChart(result.labels, result.prices, false, false);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false, true);
+            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false, false);
             updatePriceStats(window.priceChart.pricesTomorrow);
         }
     }
