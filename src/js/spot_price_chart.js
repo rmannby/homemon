@@ -180,24 +180,53 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
         }
     });
 };
+
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
     if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
         let energyData = e.detail;
-        
-        // If today's data, slice off the current hour's consumption
         const selectedValue = Number(selector.value);
-        if (selectedValue === 0) {  // Today's view
+        
+        if (selectedValue === 0) {
             const currentHour = new Date().getHours();
             energyData = energyData.slice(0, currentHour);
         }
         
+        const totalEnergy = energyData.reduce((sum, val) => sum + Number(val), 0);
+        
         window.priceChart.chartInstance.data.datasets[1].data = energyData;
+        window.priceChart.chartInstance.data.datasets[1].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
+        
+        if (selectedValue === 0 || selectedValue === -1) {
+            let priceArray = selectedValue === 0 
+                ? window.priceChart.pricesToday 
+                : window.priceChart.pricesYesterday;
+            
+            if (priceArray && priceArray.length > 0) {
+                const prices = priceArray.map(Number);
+                const hoursToProcess = Math.min(energyData.length, prices.length);
+                let totalCost = 0;
+                let weightedConsumption = 0;
+                
+                for (let i = 0; i < hoursToProcess; i++) {
+                    const consumption = Number(energyData[i]);
+                    const price = prices[i];
+                    totalCost += consumption * price;
+                    weightedConsumption += consumption;
+                }
+                
+                const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
+                const totalCostDisplay = totalCost.toFixed(2);
+                window.priceChart.chartInstance.data.datasets[0].label =
+                    `Elpris (${averagePrice.toFixed(2)} SEK/kWh, Totalt: ${totalCostDisplay} SEK)`;
+            }
+        }
+        
         window.priceChart.chartInstance.update();
     }
 });
 
-const updateChart = async (dayOffset) => {
+const updateChart = async (dayOffset) => {    
     // Query energy data for historical days
     if (dayOffset <= 0) {
         const influxOffset = dayOffset === -1 ? 1 : 0;
@@ -239,6 +268,7 @@ const updateChart = async (dayOffset) => {
         }
     }
 };
+
 const initializePrices = async () => {
     await fetchElectricityPrices(-1); // Yesterday
     await fetchElectricityPrices(0);  // Today
@@ -248,19 +278,37 @@ const initializePrices = async () => {
     updateChart(0);
 };
 
+// Set the update interval in milliseconds (e.g., 1 minute or 1 hour)
+const UPDATE_INTERVAL = 900000; // 900000ms = 15 minutes
+
+const schedulePriceUpdates = () => {
+    const now = new Date();
+    // Calculate the next boundary based on UPDATE_INTERVAL.
+    // This works by rounding the current time up to the next multiple of UPDATE_INTERVAL.
+    const nextBoundary = Math.ceil(now.getTime() / UPDATE_INTERVAL) * UPDATE_INTERVAL;
+    const delay = nextBoundary - now.getTime();
+
+    setTimeout(() => {
+        updateAllPriceData();
+        // Then set the interval for all subsequent updates:
+        setInterval(updateAllPriceData, UPDATE_INTERVAL);
+    }, delay);
+};
+
+const updateAllPriceData = async () => {
+    await fetchElectricityPrices(-1);
+    await fetchElectricityPrices(0);
+    await fetchElectricityPrices(1);
+
+    const selector = document.getElementById('priceSelector');
+    if (selector) {
+        updateChart(Number(selector.value));
+    }
+};
+
 window.addEventListener('DOMContentLoaded', async () => {
     await initializePrices();
-
-    setInterval(async () => {
-        await fetchElectricityPrices(-1);
-        await fetchElectricityPrices(0);
-        await fetchElectricityPrices(1);
-        
-        const selector = document.getElementById('priceSelector');
-        if (selector) {
-            updateChart(Number(selector.value));
-        }
-    }, 30 * 60 * 1000);
+    schedulePriceUpdates();
 
     const selector = document.getElementById('priceSelector');
     if (selector) {
