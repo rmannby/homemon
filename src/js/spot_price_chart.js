@@ -155,7 +155,14 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: { position: 'top' },
+                legend: { 
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        boxHeight: 12,
+                        padding: 15
+                    }
+                },
                 title: { display: true, text: 'El-spotpris' },
                 annotation: { annotations }
             },
@@ -218,7 +225,7 @@ window.addEventListener('energyDataReceived', function(e) {
                 const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
                 const totalCostDisplay = totalCost.toFixed(2);
                 window.priceChart.chartInstance.data.datasets[0].label =
-                    `Elpris (${averagePrice.toFixed(2)} SEK/kWh, Totalt: ${totalCostDisplay} SEK)`;
+                    `Elpris (Totalt: ${totalCostDisplay} SEK)`;
             }
         }
         
