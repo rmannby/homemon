@@ -96,7 +96,7 @@ const updatePriceStats = (prices) => {
     minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
 };
 
-const renderChart = (labels, data, showConsumption = true) => {
+const renderChart = (labels, data, showConsumption = true, highlightCurrentHour = true) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75;
     const ctx = canvas.getContext('2d');
@@ -105,8 +105,7 @@ const renderChart = (labels, data, showConsumption = true) => {
         window.priceChart.chartInstance.destroy();
     }
 
-    const hasHighValues = data.some(value => parseFloat(value) >= 1.5);
-    const annotations = hasHighValues ? {
+    const annotations = data.some(value => parseFloat(value) >= 1.5) ? {
         line1: {
             type: 'line',
             yMin: 1.50,
@@ -126,10 +125,10 @@ const renderChart = (labels, data, showConsumption = true) => {
     const datasets = [{
         label: 'Elpris (SEK/kWh)',
         data: data,
-        backgroundColor: labels.map((label, index) => {
+        backgroundColor: labels.map((label) => {
             const hour = parseInt(label);
             const currentHour = new Date().getHours();
-            return (showConsumption && hour === currentHour) 
+            return (highlightCurrentHour && hour === currentHour) 
                 ? 'rgba(255, 99, 132, 0.6)'  
                 : 'rgba(2, 169, 231, 0.2)';
         }),
@@ -181,7 +180,6 @@ const renderChart = (labels, data, showConsumption = true) => {
         }
     });
 };
-
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
     if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
@@ -201,11 +199,7 @@ window.addEventListener('energyDataReceived', function(e) {
 
 const updateChart = async (dayOffset) => {
     // Query energy data for historical days
-    // For InfluxDB: offset 0 = today, offset 1 = yesterday
     if (dayOffset <= 0) {
-        // Convert price chart offset to InfluxDB offset
-        // -1 (yesterday in price chart) -> 1 (yesterday in InfluxDB)
-        // 0 (today in price chart) -> 0 (today in InfluxDB)
         const influxOffset = dayOffset === -1 ? 1 : 0;
         window.queryHourlyEnergy?.(influxOffset);
     }
@@ -214,38 +208,37 @@ const updateChart = async (dayOffset) => {
         if (window.priceChart.pricesYesterday.length === 0) {
             const result = await fetchElectricityPrices(-1);
             if (result) {
-                renderChart(result.labels, result.prices, true);
+                renderChart(result.labels, result.prices, true, false);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsYesterday, window.priceChart.pricesYesterday, true);
+            renderChart(window.priceChart.labelsYesterday, window.priceChart.pricesYesterday, true, false);
             updatePriceStats(window.priceChart.pricesYesterday);
         }
-    } else     if (dayOffset === 0) {
+    } else if (dayOffset === 0) {
         if (window.priceChart.pricesToday.length === 0) {
             const result = await fetchElectricityPrices(0);
             if (result) {
-                renderChart(result.labels, result.prices, true);
+                renderChart(result.labels, result.prices, true, true);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsToday, window.priceChart.pricesToday, true);
+            renderChart(window.priceChart.labelsToday, window.priceChart.pricesToday, true, true);
             updatePriceStats(window.priceChart.pricesToday);
         }
     } else if (dayOffset === 1) {
         if (window.priceChart.pricesTomorrow.length === 0) {
             const result = await fetchElectricityPrices(1);
             if (result) {
-                renderChart(result.labels, result.prices, false);
+                renderChart(result.labels, result.prices, false, true);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false);
+            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false, true);
             updatePriceStats(window.priceChart.pricesTomorrow);
         }
     }
 };
-
 const initializePrices = async () => {
     await fetchElectricityPrices(-1); // Yesterday
     await fetchElectricityPrices(0);  // Today
