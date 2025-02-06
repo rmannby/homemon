@@ -18,120 +18,109 @@ DEFAULT_PRICE_REGION = "SE3"
 
 class Gateway:
     def handle_pubnub_message(self, message):
-        """Handle incoming PubNub messages"""
-        try:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            # If message is a string, try to parse it as JSON
-            if isinstance(message, str):
-                try:
-                    # Remove "Copy" if present and any leading/trailing whitespace
-                    clean_message = message.replace('Copy', '').strip()
-                    message = json.loads(clean_message)
-                    print(f"\n[{timestamp}] Received and parsed message:")
-                except json.JSONDecodeError as e:
-                    print(f"[{timestamp}] Failed to parse message as JSON:")
-                    print(f"└── Error: {str(e)}")
-                    return
-            else:
-                print(f"\n[{timestamp}] Received message:")
-
-            if not isinstance(message, dict):
-                print(f"└── Error: Skipping non-dict message of type {type(message)}")
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] Raw message received: {message}")
+        
+        if isinstance(message, str):
+            try:
+                clean_message = message.replace('Copy', '').strip()
+                message = json.loads(clean_message)
+                print(f"[{timestamp}] Parsed message: {message}")
+            except json.JSONDecodeError as e:
+                print(f"[{timestamp}] JSON parse error: {e}")
+                print(f"[{timestamp}] Raw message content: {clean_message}")
                 return
 
-            msg_type = message.get('type')
-            query_type = message.get('query_type')
+        if not isinstance(message, dict):
+            print(f"[{timestamp}] Error: Skipping non-dict message of type {type(message)}")
+            return
 
-            print(f"├── Message Type: {msg_type}")
-            print(f"└── Query Type: {query_type if query_type else 'N/A'}")
+        msg_type = message.get('type')
+        query_type = message.get('query_type')
 
-            if msg_type == 'query_request' and query_type == 'hourly_energy':
-                response_channel = message.get('response_channel', 'RpiGate')
-                day_offset = message.get('day_offset', 0)
+        print(f"[{timestamp}] Message Type: {msg_type}")
+        print(f"[{timestamp}] Query Type: {query_type if query_type else 'N/A'}")
+
+        if msg_type == 'query_request' and query_type == 'hourly_energy':
+            response_channel = message.get('response_channel', 'RpiGate')
+            day_offset = message.get('day_offset', 0)
+            
+            print(f"[{timestamp}] Processing hourly energy query:")
+            print(f"├── Day Offset: {day_offset}")
+            print(f"└── Response Channel: {response_channel}")
+            
+            # Calculate time range for the query
+            today = datetime.now()
+            local_offset = timedelta(hours=self.timezone_offset)
+            
+            # Start from local midnight (00:00) of the requested day
+            local_start = (today - timedelta(days=day_offset)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            local_end = local_start + timedelta(days=1)
+            
+            # Convert local times to UTC for query
+            utc_start = (local_start - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+            utc_end = (local_end - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
+            
+            print(f"├── Query Start (UTC): {utc_start}")
+            print(f"└── Query End (UTC): {utc_end}")
+            
+            success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
+            
+            if success:
+                hourly_data = []
+                total_usage = 0
                 
-                print(f"[{timestamp}] Processing hourly energy query:")
+                for point in result:
+                    if point.get('hourly_usage') is not None:
+                        point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                        # Adjust the hour to local time
+                        local_time = point_time + local_offset
+                        usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
+                        total_usage += usage
+                        hourly_data.append({
+                            'hour': local_time.hour,
+                            'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
+                            'usage_kwh': usage
+                        })
+                
+                response = {
+                    'Channel': response_channel,
+                    'data_type': 'hourly_energy_update',  # Changed from 'hourly_energy_import'
+                    'day_offset': day_offset,
+                    'hourly_usage': hourly_data,
+                    'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                }
+
+                print(f"[{timestamp}] Query results:")
                 print(f"├── Day Offset: {day_offset}")
-                print(f"└── Response Channel: {response_channel}")
-                
-                # Calculate time range for the query
-                today = datetime.now()
-                local_offset = timedelta(hours=self.timezone_offset)
-                
-                # Start from local midnight (00:00) of the requested day
-                local_start = (today - timedelta(days=day_offset)).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                local_end = local_start + timedelta(days=1)
-                
-                # Convert local times to UTC for query
-                utc_start = (local_start - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
-                utc_end = (local_end - local_offset).strftime('%Y-%m-%dT%H:%M:%SZ')
-                
-                print(f"├── Query Start (UTC): {utc_start}")
-                print(f"└── Query End (UTC): {utc_end}")
-                
-                success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
-                
-                if success:
-                    hourly_data = []
-                    total_usage = 0
-                    
-                    for point in result:
-                        if point.get('hourly_usage') is not None:
-                            point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
-                            # Adjust the hour to local time
-                            local_time = point_time + local_offset
-                            usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
-                            total_usage += usage
-                            hourly_data.append({
-                                'hour': local_time.hour,
-                                'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
-                                'usage_kwh': usage
-                            })
-                    
-                    response = {
-                        'Channel': response_channel,
-                        'data_type': 'hourly_energy_update',  # Changed from 'hourly_energy_import'
-                        'day_offset': day_offset,
-                        'hourly_usage': hourly_data,
-                        'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                    }
-
-                    print(f"[{timestamp}] Query results:")
-                    print(f"├── Day Offset: {day_offset}")
-                    print(f"├── Data Points: {len(hourly_data)}")
-                    if hourly_data:
-                        print(f"├── Time Range: {hourly_data[0]['datetime']} to {hourly_data[-1]['datetime']}")
-                        print(f"├── Total Usage: {round(total_usage, 2)} kWh")
-                        print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2)} kWh")
-                    else:
-                        print(f"└── No data points found")
+                print(f"├── Data Points: {len(hourly_data)}")
+                if hourly_data:
+                    print(f"├── Time Range: {hourly_data[0]['datetime']} to {hourly_data[-1]['datetime']}")
+                    print(f"├── Total Usage: {round(total_usage, 2)} kWh")
+                    print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2)} kWh")
                 else:
-                    response = {
-                        'Channel': response_channel,
-                        'data_type': 'hourly_energy_import',
-                        'status': 'error',
-                        'error': result,
-                        'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                    }
-                    print(f"[{timestamp}] Query error:")
-                    print(f"└── {result}")
-                
-                self.pubnub_handler.publish_data(response, response_channel)
-                
-            elif message == 'Connected':
-                print(f"[{timestamp}] New client connected - publishing current data")
-                current_data = self.xbee_handler.get_current_data()
-                # Get the channel from the original message's context or use a specific channel
-                response_channel = message.get('response_channel', 'RpiGate')
-                self.pubnub_handler.publish_data(current_data, response_channel)
-                
-        except Exception as e:
-            print(f"[{timestamp}] Error handling message:")
-            print(f"└── Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+                    print(f"└── No data points found")
+            else:
+                response = {
+                    'Channel': response_channel,
+                    'data_type': 'hourly_energy_import',
+                    'status': 'error',
+                    'error': result,
+                    'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                }
+                print(f"[{timestamp}] Query error:")
+                print(f"└── {result}")
+            
+            self.pubnub_handler.publish_data(response, response_channel)
+            
+        elif message == 'Connected':
+            print(f"[{timestamp}] New client connected - publishing current data")
+            current_data = self.xbee_handler.get_current_data()
+            # Get the channel from the original message's context or use a specific channel
+            response_channel = message.get('response_channel', 'RpiGate')
+            self.pubnub_handler.publish_data(current_data, response_channel)
 
     def __init__(self):
         """Initialize Gateway"""
