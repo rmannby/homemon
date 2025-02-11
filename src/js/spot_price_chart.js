@@ -150,11 +150,13 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
             yMax: avgToday,
             borderColor: 'rgba(2, 169, 231, 1)', // blue
             borderWidth: 2,
+            borderDash: [6, 6],
             label: {
-                content: 'Avg today: ' + avgToday.toFixed(2) + ' SEK',
+                content: 'Dagens genomsnitt: ' + avgToday.toFixed(2) + ' SEK',
                 enabled: true,
                 position: 'start',
-                backgroundColor: 'rgba(2, 169, 231, 0.2)'
+                backgroundColor: 'rgba(2, 169, 231, 0.2)',
+                display: true
             }
         };
     }
