@@ -23,6 +23,17 @@ if (selector) {
     selector.parentNode.insertBefore(asterisk, selector.nextSibling);
 }
 
+// Cost constants
+const TRANSMISSION_COST = 31.20;           // Elöverföring (öre/kWh)
+const ENERGY_TAX = 43.90;                  // Energiskatt (öre/kWh)
+const VARIABLE_COSTS = 3.54;               // Rörliga kostnader (öre/kWh)
+const FIXED_SPOT_SURCHARGE = 7.00;         // Fast påslag spot (öre/kWh)
+const FIXED_CERTIFICATE_SURCHARGE = 1.40;  // Fast påslag elcertifikat (öre/kWh)
+const ADDITIONAL_COSTS = (TRANSMISSION_COST + ENERGY_TAX + VARIABLE_COSTS + FIXED_SPOT_SURCHARGE + FIXED_CERTIFICATE_SURCHARGE) / 100;
+
+// Average spot price for last year (from previous calculations)
+const AVG_SPOTPRICE_LAST_YEAR = 40.88 / 100;
+
 const fetchElectricityPrices = async (dayOffset = 0) => {
     try {
         const today = new Date();
@@ -55,7 +66,10 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
             return `${date.getHours()}:00`;
         });
 
-        const prices = data.map(entry => (entry.SEK_per_kWh * 1.25 + 13.53 / 100).toFixed(2));
+        // Updated price calculation using the new additional costs
+        const prices = data.map(entry => (
+            ((entry.SEK_per_kWh + ADDITIONAL_COSTS) * 1.25).toFixed(2)
+        ));
 
         if (dayOffset === -1) {
             window.priceChart.labelsYesterday = labels;
@@ -105,22 +119,45 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
         window.priceChart.chartInstance.destroy();
     }
 
-    const annotations = data.some(value => parseFloat(value) >= 1.5) ? {
+    // Calculate annotation for last year's average cost line
+    const annotationPrice = (AVG_SPOTPRICE_LAST_YEAR + ADDITIONAL_COSTS) * 1.25;
+    
+    // Create annotations object with the existing red line (line1)
+    const annotations = {
         line1: {
             type: 'line',
-            yMin: 1.50,
-            yMax: 1.50,
-            borderColor: 'rgba(255, 99, 132, 1)',
+            yMin: annotationPrice,
+            yMax: annotationPrice,
+            borderColor: 'rgba(255, 99, 132, 1)', // red line
             borderWidth: 2,
             borderDash: [6, 6],
             label: {
-                content: '1.50 SEK',
+                content: annotationPrice.toFixed(2) + ' SEK',
                 enabled: true,
                 position: 'end',
                 backgroundColor: 'rgba(255, 99, 132, 0.2)'
             }
         }
-    } : {};
+    };
+
+    // If we're rendering today's data (detected via highlightCurrentHour flag),
+    // then compute today's average price and add a blue annotation line.
+    if (highlightCurrentHour && data && data.length > 0) {
+        const avgToday = data.reduce((sum, val) => sum + Number(val), 0) / data.length;
+        annotations.line2 = {
+            type: 'line',
+            yMin: avgToday,
+            yMax: avgToday,
+            borderColor: 'rgba(2, 169, 231, 1)', // blue
+            borderWidth: 2,
+            label: {
+                content: 'Avg today: ' + avgToday.toFixed(2) + ' SEK',
+                enabled: true,
+                position: 'start',
+                backgroundColor: 'rgba(2, 169, 231, 0.2)'
+            }
+        };
+    }
 
     const datasets = [{
         label: 'Elpris (SEK/kWh)',
