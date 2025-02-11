@@ -121,46 +121,43 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
 
     // Calculate annotation for last year's average cost line
     const annotationPrice = (AVG_SPOTPRICE_LAST_YEAR + ADDITIONAL_COSTS) * 1.25;
-    
-    // Create annotations object with the existing red line (line1)
-    const annotations = {
-        line1: {
-            type: 'line',
-            yMin: annotationPrice,
-            yMax: annotationPrice,
-            borderColor: 'rgba(255, 99, 132, 1)', // red line
-            borderWidth: 2,
-            borderDash: [6, 6],
-            label: {
-                content: annotationPrice.toFixed(2) + ' SEK',
-                enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)'
-            }
-        }
-    };
+          // Create annotations object with the existing red line (line1)
+          const annotations = {
+              line1: {
+                  type: 'line',
+                  yMin: annotationPrice,
+                  yMax: annotationPrice,
+                  borderColor: 'rgba(255, 99, 132, 1)',
+                  borderWidth: 2,
+                  borderDash: [6, 6],
+                  label: {
+                      content: annotationPrice.toFixed(2) + ' SEK',
+                      enabled: true,
+                      position: 'end',
+                      backgroundColor: 'rgba(255, 99, 132, 0.2)'
+                  }
+              }
+          };
 
-    // If we're rendering today's data (detected via highlightCurrentHour flag),
-    // then compute today's average price and add a blue annotation line.
-    if (highlightCurrentHour && data && data.length > 0) {
-        const avgToday = data.reduce((sum, val) => sum + Number(val), 0) / data.length;
-        annotations.line2 = {
-            type: 'line',
-            yMin: avgToday,
-            yMax: avgToday,
-            borderColor: 'rgba(2, 169, 231, 1)', // blue
-            borderWidth: 2,
-            borderDash: [6, 6],
-            label: {
-                content: 'Dagens genomsnitt: ' + avgToday.toFixed(2) + ' SEK',
-                enabled: true,
-                position: 'start',
-                backgroundColor: 'rgba(2, 169, 231, 0.2)',
-                display: true
-            }
-        };
-    }
-
+          if (data && data.length > 0) {
+              const avgPrice = data.reduce((sum, val) => sum + Number(val), 0) / data.length;
+              annotations.line2 = {
+                  type: 'line',
+                  yMin: avgPrice,
+                  yMax: avgPrice,
+                  borderColor: 'rgba(2, 169, 231, 1)',
+                  borderWidth: 2,
+                  borderDash: [6, 6],
+                  label: {
+                      content: `${highlightCurrentHour ? 'Dagens' : labels === window.priceChart.labelsYesterday ? 'Gårdagens' : 'Morgondagens'} genomsnitt: ${avgPrice.toFixed(2)} SEK`,
+                      enabled: true,
+                      position: 'start',
+                      backgroundColor: 'rgba(2, 169, 231, 0.2)',
+                      color: '#000000',
+                      font: { size: 12 }
+                  }
+              };
+          }
     const datasets = [{
         label: 'Elpris (SEK/kWh)',
         data: data,
