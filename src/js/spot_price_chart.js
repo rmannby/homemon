@@ -139,25 +139,6 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
               }
           };
 
-          if (data && data.length > 0) {
-              const avgPrice = data.reduce((sum, val) => sum + Number(val), 0) / data.length;
-              annotations.line2 = {
-                  type: 'line',
-                  yMin: avgPrice,
-                  yMax: avgPrice,
-                  borderColor: 'rgba(2, 169, 231, 1)',
-                  borderWidth: 2,
-                  borderDash: [6, 6],
-                  label: {
-                      content: `${highlightCurrentHour ? 'Dagens' : labels === window.priceChart.labelsYesterday ? 'Gårdagens' : 'Morgondagens'} genomsnitt: ${avgPrice.toFixed(2)} SEK`,
-                      enabled: true,
-                      position: 'start',
-                      backgroundColor: 'rgba(2, 169, 231, 0.2)',
-                      color: '#000000',
-                      font: { size: 12 }
-                  }
-              };
-          }
     const datasets = [{
         label: 'Elpris (SEK/kWh)',
         data: data,
