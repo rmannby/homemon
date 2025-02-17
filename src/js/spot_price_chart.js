@@ -81,7 +81,7 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
 
         // Updated price calculation using the new additional costs
         const prices = data.map(entry => (
-            ((entry.SEK_per_kWh + ADDITIONAL_COSTS) * 1.25).toFixed(2)
+            ((entry.SEK_per_kWh + TOTAL_SALES) * 1.25).toFixed(2)
         ));
 
         if (dayOffset === -1) {
