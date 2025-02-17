@@ -23,13 +23,26 @@ if (selector) {
     selector.parentNode.insertBefore(asterisk, selector.nextSibling);
 }
 
-// Cost constants
-const TRANSMISSION_COST = 31.20;           // Elöverföring (öre/kWh)
-const ENERGY_TAX = 43.90;                  // Energiskatt (öre/kWh)
-const VARIABLE_COSTS = 3.54;               // Rörliga kostnader (öre/kWh)
-const FIXED_SPOT_SURCHARGE = 7.00;         // Fast påslag spot (öre/kWh)
-const FIXED_CERTIFICATE_SURCHARGE = 1.40;  // Fast påslag elcertifikat (öre/kWh)
-const ADDITIONAL_COSTS = (TRANSMISSION_COST + ENERGY_TAX + VARIABLE_COSTS + FIXED_SPOT_SURCHARGE + FIXED_CERTIFICATE_SURCHARGE) / 100;
+// Distribution costs (öre/kWh)
+const DISTRIBUTION_COSTS = {
+    TRANSMISSION: 31.20,    // Elöverföring
+    ENERGY_TAX: 43.90      // Energiskatt
+};
+
+// Calculate total distribution cost
+const TOTAL_DISTRIBUTION = Object.values(DISTRIBUTION_COSTS).reduce((a, b) => a + b, 0) / 100;
+
+// Sales costs (öre/kWh)
+const SALES_COSTS = {
+    VARIABLE: 3.54,                    // Rörliga kostnader
+    FIXED_SPOT: 7.00,                  // Fast påslag spot
+    FIXED_CERTIFICATE: 1.40            // Fast påslag elcertifikat
+};
+
+// Calculate total sales cost
+const TOTAL_SALES = Object.values(SALES_COSTS).reduce((a, b) => a + b, 0) / 100;
+
+const ADDITIONAL_COSTS = (TOTAL_SALES + TOTAL_DISTRIBUTION);
 
 // Average spot price for last year (from previous calculations)
 const AVG_SPOTPRICE_LAST_YEAR = 40.88 / 100;
