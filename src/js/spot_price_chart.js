@@ -184,7 +184,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         return (TOTAL_DISTRIBUTION * (1 + VAT_RATE)).toFixed(4);
     });
 
-    // Create datasets for stacked bar chart
+    // Create datasets for stacked bar chart using blue color scheme
     const datasets = [
         {
             label: 'Spotpris (inkl. moms)',
@@ -192,10 +192,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
                 return (highlightCurrentHour && hour === currentHour) 
-                    ? 'rgba(24, 144, 255, 0.8)'  
-                    : 'rgba(24, 144, 255, 0.6)';
+                    ? 'rgba(13, 71, 161, 0.9)'  // Dark blue - highlighted
+                    : 'rgba(13, 71, 161, 0.7)'; // Dark blue - normal
             }),
-            borderColor: 'rgba(24, 144, 255, 1)',
+            borderColor: 'rgba(13, 71, 161, 1)',
             borderWidth: 1,
             yAxisID: 'y',
             // This is necessary for stacked charts
@@ -207,10 +207,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
                 return (highlightCurrentHour && hour === currentHour) 
-                    ? 'rgba(82, 196, 26, 0.8)'  
-                    : 'rgba(82, 196, 26, 0.6)';
+                    ? 'rgba(25, 118, 210, 0.9)'  // Medium blue - highlighted
+                    : 'rgba(25, 118, 210, 0.7)'; // Medium blue - normal
             }),
-            borderColor: 'rgba(82, 196, 26, 1)',
+            borderColor: 'rgba(25, 118, 210, 1)',
             borderWidth: 1,
             yAxisID: 'y',
             stack: 'stack0'
@@ -221,10 +221,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
                 return (highlightCurrentHour && hour === currentHour) 
-                    ? 'rgba(250, 173, 20, 0.8)'  
-                    : 'rgba(250, 173, 20, 0.6)';
+                    ? 'rgba(66, 165, 245, 0.9)'  // Light blue - highlighted
+                    : 'rgba(66, 165, 245, 0.7)'; // Light blue - normal
             }),
-            borderColor: 'rgba(250, 173, 20, 1)',
+            borderColor: 'rgba(66, 165, 245, 1)',
             borderWidth: 1,
             yAxisID: 'y',
             stack: 'stack0'
@@ -239,11 +239,24 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
             backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
             yAxisID: 'y1',
             // Not part of the stack
-            stack: 'consumption'
+            stack: 'consumption',
+            // Use negative order to ensure it's drawn on top
+            order: -1
         });
     }
+
+    // Set explicit order values for the stacked bar datasets to ensure proper layering
+    datasets[0].order = 1; // Spotpris
+    datasets[1].order = 2; // Försäljningskostnader
+    datasets[2].order = 3; // Distributionskostnader
 
     window.priceChart.chartInstance = new Chart(ctx, {
         type: 'bar',
