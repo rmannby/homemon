@@ -203,7 +203,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     // Create datasets for stacked bar chart using blue color scheme
     const datasets = [
         {
-            label: 'Spotpris (inkl. moms)',
+            label: 'Spotpris',
             data: spotPricesWithVAT,
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
@@ -218,7 +218,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             stack: 'stack0'
         },
         {
-            label: 'Försäljningskostnader (inkl. moms)',
+            label: 'Försäljning',
             data: salesCostsWithVAT,
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
@@ -232,7 +232,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             stack: 'stack0'
         },
         {
-            label: 'Distributionskostnader (inkl. moms)',
+            label: 'Distribution',
             data: distributionCostsWithVAT,
             backgroundColor: labels.map((label) => {
                 const hour = parseInt(label);
@@ -375,7 +375,7 @@ window.addEventListener('energyDataReceived', function(e) {
                 
                 // Update chart title to show the total cost
                 window.priceChart.chartInstance.options.plugins.title.text = 
-                    `El-spotpris - Kostnadsfördelning (Totalt: ${totalCostDisplay} SEK)`;
+                    `Förbrukningskostnad (${totalCostDisplay} SEK)`;
             }
         }
         
