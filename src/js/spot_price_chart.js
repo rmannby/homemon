@@ -145,11 +145,26 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         window.priceChart.chartInstance.destroy();
     }
 
-    // Calculate annotation for last year's average cost line
+    // Calculate annotation for last year's average cost line (commented out for now)
     const annotationPrice = (AVG_SPOTPRICE_LAST_YEAR + ADDITIONAL_COSTS) * (1 + VAT_RATE);
     
-    // Create annotations object with the existing red line (line1)
+    // Create annotations object with EV charging reference price line
     const annotations = {
+        evChargeLine: {
+            type: 'line',
+            yMin: 1.50,
+            yMax: 1.50,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 2,
+            borderDash: [6, 6],
+            label: {
+                content: '1.50 SEK - EV laddning på jobbet',
+                enabled: true,
+                position: 'end',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)'
+            }
+        }
+        /* Original annotation hidden for now - can be re-enabled later
         line1: {
             type: 'line',
             yMin: annotationPrice,
@@ -164,6 +179,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 backgroundColor: 'rgba(255, 99, 132, 0.2)'
             }
         }
+        */
     };
 
     // Create price component datasets for stacked bar chart
