@@ -8,7 +8,11 @@ window.priceChart = {
     pricesTomorrow: [],
     labelsTomorrow: [],
     pricesYesterday: [],
-    labelsYesterday: []
+    labelsYesterday: [],
+    // Add storage for component prices
+    spotPricesRawToday: [],
+    spotPricesRawYesterday: [],
+    spotPricesRawTomorrow: []
 };
 
 const selector = document.getElementById('priceSelector');
@@ -47,6 +51,9 @@ const ADDITIONAL_COSTS = (TOTAL_SALES + TOTAL_DISTRIBUTION);
 // Average spot price for last year (from previous calculations)
 const AVG_SPOTPRICE_LAST_YEAR = 40.88 / 100;
 
+// VAT rate (25%)
+const VAT_RATE = 0.25;
+
 const fetchElectricityPrices = async (dayOffset = 0) => {
     try {
         const today = new Date();
@@ -79,25 +86,31 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
             return `${date.getHours()}:00`;
         });
 
-        // Updated price calculation using the new additional costs
+        // Store raw spot prices for component calculations
+        const spotPricesRaw = data.map(entry => entry.SEK_per_kWh);
+
+        // Total prices (for backwards compatibility)
         const prices = data.map(entry => (
-            ((entry.SEK_per_kWh + TOTAL_SALES) * 1.25).toFixed(2)
+            ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE)).toFixed(2)
         ));
 
         if (dayOffset === -1) {
             window.priceChart.labelsYesterday = labels;
             window.priceChart.pricesYesterday = prices;
+            window.priceChart.spotPricesRawYesterday = spotPricesRaw;
         } else if (dayOffset === 0) {
             window.priceChart.labelsToday = labels;
             window.priceChart.pricesToday = prices;
+            window.priceChart.spotPricesRawToday = spotPricesRaw;
         } else {
             window.priceChart.labelsTomorrow = labels;
             window.priceChart.pricesTomorrow = prices;
+            window.priceChart.spotPricesRawTomorrow = spotPricesRaw;
             const asterisk = document.getElementById('tomorrowAvailable');
             if (asterisk) asterisk.style.display = 'inline';
         }
         
-        return { labels, prices };
+        return { labels, prices, spotPricesRaw };
 
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
@@ -118,12 +131,12 @@ const updatePriceStats = (prices) => {
     const statsElement = document.getElementById('priceStats');
     const [avgElement, maxElement, minElement] = statsElement.querySelectorAll('p');
 
-    avgElement.innerHTML = `Genomsnitt: ${averagePrice} SEK/kWh`;
-    maxElement.innerHTML = `Högsta pris: ${maxPrice} SEK/kWh`;
-    minElement.innerHTML = `Lägsta pris: ${minPrice} SEK/kWh`;
+    avgElement.innerHTML = `<strong>Genomsnitt:</strong> ${averagePrice} SEK/kWh`;
+    maxElement.innerHTML = `<strong>Högsta pris:</strong> ${maxPrice} SEK/kWh`;
+    minElement.innerHTML = `<strong>Lägsta pris:</strong> ${minPrice} SEK/kWh`;
 };
 
-const renderChart = (labels, data, showConsumption = true, highlightCurrentHour = true) => {
+const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, highlightCurrentHour = true) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75;
     const ctx = canvas.getContext('2d');
@@ -133,40 +146,92 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
     }
 
     // Calculate annotation for last year's average cost line
-    const annotationPrice = (AVG_SPOTPRICE_LAST_YEAR + ADDITIONAL_COSTS) * 1.25;
-          // Create annotations object with the existing red line (line1)
-          const annotations = {
-              line1: {
-                  type: 'line',
-                  yMin: annotationPrice,
-                  yMax: annotationPrice,
-                  borderColor: 'rgba(255, 99, 132, 1)',
-                  borderWidth: 2,
-                  borderDash: [6, 6],
-                  label: {
-                      content: annotationPrice.toFixed(2) + ' SEK',
-                      enabled: true,
-                      position: 'end',
-                      backgroundColor: 'rgba(255, 99, 132, 0.2)'
-                  }
-              }
-          };
+    const annotationPrice = (AVG_SPOTPRICE_LAST_YEAR + ADDITIONAL_COSTS) * (1 + VAT_RATE);
+    
+    // Create annotations object with the existing red line (line1)
+    const annotations = {
+        line1: {
+            type: 'line',
+            yMin: annotationPrice,
+            yMax: annotationPrice,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 2,
+            borderDash: [6, 6],
+            label: {
+                content: annotationPrice.toFixed(2) + ' SEK',
+                enabled: true,
+                position: 'end',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)'
+            }
+        }
+    };
 
-    const datasets = [{
-        label: 'Elpris (SEK/kWh)',
-        data: data,
-        backgroundColor: labels.map((label) => {
-            const hour = parseInt(label);
-            const currentHour = new Date().getHours();
-            return (highlightCurrentHour && hour === currentHour) 
-                ? 'rgba(255, 99, 132, 0.6)'  
-                : 'rgba(2, 169, 231, 0.2)';
-        }),
-        borderColor: 'rgba(2, 169, 231, 1)',
-        borderWidth: 1,
-        yAxisID: 'y'
-    }];
+    // Create price component datasets for stacked bar chart
+    const currentHour = new Date().getHours();
 
+    // Component 1: Spot price with VAT
+    const spotPricesWithVAT = spotPricesRaw.map((price, index) => {
+        return (price * (1 + VAT_RATE)).toFixed(4);
+    });
+
+    // Component 2: Sales costs with VAT
+    const salesCostsWithVAT = spotPricesRaw.map(() => {
+        return (TOTAL_SALES * (1 + VAT_RATE)).toFixed(4);
+    });
+
+    // Component 3: Distribution costs with VAT
+    const distributionCostsWithVAT = spotPricesRaw.map(() => {
+        return (TOTAL_DISTRIBUTION * (1 + VAT_RATE)).toFixed(4);
+    });
+
+    // Create datasets for stacked bar chart
+    const datasets = [
+        {
+            label: 'Spotpris (inkl. moms)',
+            data: spotPricesWithVAT,
+            backgroundColor: labels.map((label) => {
+                const hour = parseInt(label);
+                return (highlightCurrentHour && hour === currentHour) 
+                    ? 'rgba(24, 144, 255, 0.8)'  
+                    : 'rgba(24, 144, 255, 0.6)';
+            }),
+            borderColor: 'rgba(24, 144, 255, 1)',
+            borderWidth: 1,
+            yAxisID: 'y',
+            // This is necessary for stacked charts
+            stack: 'stack0'
+        },
+        {
+            label: 'Försäljningskostnader (inkl. moms)',
+            data: salesCostsWithVAT,
+            backgroundColor: labels.map((label) => {
+                const hour = parseInt(label);
+                return (highlightCurrentHour && hour === currentHour) 
+                    ? 'rgba(82, 196, 26, 0.8)'  
+                    : 'rgba(82, 196, 26, 0.6)';
+            }),
+            borderColor: 'rgba(82, 196, 26, 1)',
+            borderWidth: 1,
+            yAxisID: 'y',
+            stack: 'stack0'
+        },
+        {
+            label: 'Distributionskostnader (inkl. moms)',
+            data: distributionCostsWithVAT,
+            backgroundColor: labels.map((label) => {
+                const hour = parseInt(label);
+                return (highlightCurrentHour && hour === currentHour) 
+                    ? 'rgba(250, 173, 20, 0.8)'  
+                    : 'rgba(250, 173, 20, 0.6)';
+            }),
+            borderColor: 'rgba(250, 173, 20, 1)',
+            borderWidth: 1,
+            yAxisID: 'y',
+            stack: 'stack0'
+        }
+    ];
+
+    // Add consumption dataset if needed
     if (showConsumption) {
         datasets.push({
             label: 'Förbrukning (kWh)',
@@ -174,7 +239,9 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
             backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            yAxisID: 'y1'
+            yAxisID: 'y1',
+            // Not part of the stack
+            stack: 'consumption'
         });
     }
 
@@ -193,11 +260,31 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
                         padding: 15
                     }
                 },
-                title: { display: true, text: 'El-spotpris' },
-                annotation: { annotations }
+                title: { display: true, text: 'El-spotpris - Kostnadsfördelning' },
+                annotation: { annotations },
+                tooltip: {
+                    callbacks: {
+                        // Add a custom footer to show total price
+                        footer: (tooltipItems) => {
+                            // Calculate total from all stacks for this data point
+                            const index = tooltipItems[0].dataIndex;
+                            let total = 0;
+                            
+                            // Sum all components that are in the price stack
+                            tooltipItems.forEach(item => {
+                                if (item.dataset.stack === 'stack0') {
+                                    total += parseFloat(item.raw);
+                                }
+                            });
+                            
+                            return `Totalt: ${total.toFixed(2)} SEK/kWh`;
+                        }
+                    }
+                }
             },
             scales: {
                 y: {
+                    stacked: true, // Enable stacking on the price axis
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'SEK/kWh' },
@@ -211,6 +298,7 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
                     display: showConsumption
                 },
                 x: {
+                    stacked: true, // Enable stacking on the x-axis
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
                 }
             }
@@ -220,7 +308,7 @@ const renderChart = (labels, data, showConsumption = true, highlightCurrentHour 
 
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
-    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
+    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 3) {
         let energyData = e.detail;
         const selectedValue = Number(selector.value);
         
@@ -231,16 +319,17 @@ window.addEventListener('energyDataReceived', function(e) {
         
         const totalEnergy = energyData.reduce((sum, val) => sum + Number(val), 0);
         
-        window.priceChart.chartInstance.data.datasets[1].data = energyData;
-        window.priceChart.chartInstance.data.datasets[1].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
+        // Add to consumption dataset (now at index 3)
+        window.priceChart.chartInstance.data.datasets[3].data = energyData;
+        window.priceChart.chartInstance.data.datasets[3].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
         
         if (selectedValue === 0 || selectedValue === -1) {
-            let priceArray = selectedValue === 0 
+            let pricesArray = selectedValue === 0 
                 ? window.priceChart.pricesToday 
                 : window.priceChart.pricesYesterday;
             
-            if (priceArray && priceArray.length > 0) {
-                const prices = priceArray.map(Number);
+            if (pricesArray && pricesArray.length > 0) {
+                const prices = pricesArray.map(Number);
                 const hoursToProcess = Math.min(energyData.length, prices.length);
                 let totalCost = 0;
                 let weightedConsumption = 0;
@@ -254,8 +343,10 @@ window.addEventListener('energyDataReceived', function(e) {
                 
                 const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
                 const totalCostDisplay = totalCost.toFixed(2);
-                window.priceChart.chartInstance.data.datasets[0].label =
-                    `Elpris (Totalt: ${totalCostDisplay} SEK)`;
+                
+                // Update chart title to show the total cost
+                window.priceChart.chartInstance.options.plugins.title.text = 
+                    `El-spotpris - Kostnadsfördelning (Totalt: ${totalCostDisplay} SEK)`;
             }
         }
         
@@ -274,33 +365,51 @@ const updateChart = async (dayOffset) => {
         if (window.priceChart.pricesYesterday.length === 0) {
             const result = await fetchElectricityPrices(-1);
             if (result) {
-                renderChart(result.labels, result.prices, true, false);
+                renderChart(result.labels, result.prices, result.spotPricesRaw, true, false);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsYesterday, window.priceChart.pricesYesterday, true, false);
+            renderChart(
+                window.priceChart.labelsYesterday, 
+                window.priceChart.pricesYesterday, 
+                window.priceChart.spotPricesRawYesterday, 
+                true, 
+                false
+            );
             updatePriceStats(window.priceChart.pricesYesterday);
         }
     } else if (dayOffset === 0) {  // Today
         if (window.priceChart.pricesToday.length === 0) {
             const result = await fetchElectricityPrices(0);
             if (result) {
-                renderChart(result.labels, result.prices, true, true);
+                renderChart(result.labels, result.prices, result.spotPricesRaw, true, true);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsToday, window.priceChart.pricesToday, true, true);
+            renderChart(
+                window.priceChart.labelsToday, 
+                window.priceChart.pricesToday, 
+                window.priceChart.spotPricesRawToday, 
+                true, 
+                true
+            );
             updatePriceStats(window.priceChart.pricesToday);
         }
     } else if (dayOffset === 1) {  // Tomorrow – disable current hour highlighting
         if (window.priceChart.pricesTomorrow.length === 0) {
             const result = await fetchElectricityPrices(1);
             if (result) {
-                renderChart(result.labels, result.prices, false, false);
+                renderChart(result.labels, result.prices, result.spotPricesRaw, false, false);
                 updatePriceStats(result.prices);
             }
         } else {
-            renderChart(window.priceChart.labelsTomorrow, window.priceChart.pricesTomorrow, false, false);
+            renderChart(
+                window.priceChart.labelsTomorrow, 
+                window.priceChart.pricesTomorrow, 
+                window.priceChart.spotPricesRawTomorrow, 
+                false, 
+                false
+            );
             updatePriceStats(window.priceChart.pricesTomorrow);
         }
     }
