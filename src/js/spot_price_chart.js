@@ -3,6 +3,11 @@
 Chart.register({
     id: 'currentHourHighlighter',
     beforeDraw: (chart) => {
+        // Check if highlighting is disabled via chart options
+        if (chart.options.plugins.currentHourHighlighter?.disabled === true) {
+            return;
+        }
+        
         const currentHour = new Date().getHours();
         const ctx = chart.ctx;
         
@@ -187,6 +192,70 @@ const updatePriceStats = (prices) => {
     minElement.innerHTML = `<strong>Lägsta pris:</strong> ${minPrice} SEK/kWh`;
 };
 
+// Create a custom plugin to draw a red border around the entire stack for current hour
+const currentHourStackBorder = {
+    id: 'currentHourStackBorder',
+    beforeDraw: function(chart) {
+        // Check if highlighting should be disabled
+        if (chart.options.plugins.currentHourHighlighter?.disabled === true) {
+            return;
+        }
+        
+        const currentHour = new Date().getHours();
+        const ctx = chart.ctx;
+        
+        // Find the index of current hour in labels
+        const hourIndex = chart.data.labels.findIndex(
+            label => parseInt(label) === currentHour
+        );
+        
+        if (hourIndex === -1) return;
+        
+        // Get all datasets with the same stack
+        const stackedDatasets = chart.data.datasets.filter(
+            dataset => dataset.stack === 'stack0'
+        );
+        
+        if (stackedDatasets.length === 0) return;
+        
+        // Find positions for drawing border
+        let barX, barWidth, topY, bottomY;
+        let initialized = false;
+        
+        for (let i = 0; i < stackedDatasets.length; i++) {
+            const datasetIndex = chart.data.datasets.indexOf(stackedDatasets[i]);
+            const meta = chart.getDatasetMeta(datasetIndex);
+            
+            if (!meta.visible) continue;
+            
+            const bar = meta.data[hourIndex];
+            if (!bar) continue;
+            
+            if (!initialized) {
+                barX = bar.x;
+                barWidth = bar.width;
+                topY = bar.y;
+                bottomY = bar.base;
+                initialized = true;
+            } else {
+                topY = Math.min(topY, bar.y);
+                bottomY = Math.max(bottomY, bar.base);
+            }
+        }
+        
+        if (!initialized) return;
+        
+        // Draw red border around entire stack
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 0, 0, 1)'; // Pure red for better visibility
+        ctx.lineWidth = 4; // Thicker border
+        ctx.beginPath();
+        ctx.rect(barX - barWidth/2, topY, barWidth, bottomY - topY);
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
 const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, highlightCurrentHour = true) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75;
@@ -212,22 +281,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 backgroundColor: 'rgba(255, 99, 132, 0.2)'
             }
         }
-        /* Original annotation hidden for now - can be re-enabled later
-        line1: {
-            type: 'line',
-            yMin: annotationPrice,
-            yMax: annotationPrice,
-            borderColor: 'rgba(255, 99, 132, 1)',
-            borderWidth: 2,
-            borderDash: [6, 6],
-            label: {
-                content: annotationPrice.toFixed(2) + ' SEK',
-                enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)'
-            }
-        }
-        */
     };
 
     // Get current hour for highlighting
@@ -252,67 +305,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             return brighterColors[componentIndex];
         } else {
             return baseColors[componentIndex];
-        }
-    };
-    
-    // Create a custom plugin to draw a red border around the entire stack for current hour
-    const currentHourStackBorder = {
-        id: 'currentHourStackBorder',
-        beforeDraw: function(chart) {
-            if (!highlightCurrentHour) return;
-            
-            const currentHour = new Date().getHours();
-            const ctx = chart.ctx;
-            
-            // Find the index of current hour in labels
-            const hourIndex = chart.data.labels.findIndex(
-                label => parseInt(label) === currentHour
-            );
-            
-            if (hourIndex === -1) return;
-            
-            // Get all datasets with the same stack
-            const stackedDatasets = chart.data.datasets.filter(
-                dataset => dataset.stack === 'stack0'
-            );
-            
-            if (stackedDatasets.length === 0) return;
-            
-            // Find positions for drawing border
-            let barX, barWidth, topY, bottomY;
-            let initialized = false;
-            
-            for (let i = 0; i < stackedDatasets.length; i++) {
-                const datasetIndex = chart.data.datasets.indexOf(stackedDatasets[i]);
-                const meta = chart.getDatasetMeta(datasetIndex);
-                
-                if (!meta.visible) continue;
-                
-                const bar = meta.data[hourIndex];
-                if (!bar) continue;
-                
-                if (!initialized) {
-                    barX = bar.x;
-                    barWidth = bar.width;
-                    topY = bar.y;
-                    bottomY = bar.base;
-                    initialized = true;
-                } else {
-                    topY = Math.min(topY, bar.y);
-                    bottomY = Math.max(bottomY, bar.base);
-                }
-            }
-            
-            if (!initialized) return;
-            
-            // Draw red border around entire stack
-            ctx.save();
-            ctx.strokeStyle = 'rgba(255, 0, 0, 1)'; // Pure red for better visibility
-            ctx.lineWidth = 4; // Thicker border
-            ctx.beginPath();
-            ctx.rect(barX - barWidth/2, topY, barWidth, bottomY - topY);
-            ctx.stroke();
-            ctx.restore();
         }
     };
 
@@ -432,6 +424,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                         }
                     }
                 },
+                // Add control flag for current hour highlighting
+                currentHourHighlighter: {
+                    disabled: !highlightCurrentHour
+                },
                 // Explicitly register the custom plugin
                 currentHourStackBorder
             },
@@ -514,6 +510,9 @@ const updateChart = async (dayOffset) => {
         window.queryHourlyEnergy?.(influxOffset);
     }
 
+    // Set highlightCurrentHour flag to true ONLY for today's view (dayOffset === 0)
+    const highlightCurrentHour = (dayOffset === 0);
+
     if (dayOffset === -1) {  // Yesterday
         if (window.priceChart.pricesYesterday.length === 0) {
             const result = await fetchElectricityPrices(-1);
@@ -527,7 +526,7 @@ const updateChart = async (dayOffset) => {
                 window.priceChart.pricesYesterday, 
                 window.priceChart.spotPricesRawYesterday, 
                 true, 
-                false
+                false // Explicitly set to false for yesterday
             );
             updatePriceStats(window.priceChart.pricesYesterday);
         }
@@ -544,11 +543,11 @@ const updateChart = async (dayOffset) => {
                 window.priceChart.pricesToday, 
                 window.priceChart.spotPricesRawToday, 
                 true, 
-                true
+                true // Explicitly set to true for today
             );
             updatePriceStats(window.priceChart.pricesToday);
         }
-    } else if (dayOffset === 1) {  // Tomorrow – disable current hour highlighting
+    } else if (dayOffset === 1) {  // Tomorrow
         if (window.priceChart.pricesTomorrow.length === 0) {
             const result = await fetchElectricityPrices(1);
             if (result) {
@@ -561,7 +560,7 @@ const updateChart = async (dayOffset) => {
                 window.priceChart.pricesTomorrow, 
                 window.priceChart.spotPricesRawTomorrow, 
                 false, 
-                false
+                false // Explicitly set to false for tomorrow
             );
             updatePriceStats(window.priceChart.pricesTomorrow);
         }
