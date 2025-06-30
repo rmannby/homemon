@@ -1,57 +1,5 @@
 // spot_price_chart.js
 // Add this at the top of your spot_price_chart.js file, right after your Chart.js import or script tag
-Chart.register({
-    id: 'currentHourHighlighter',
-    beforeDraw: (chart) => {
-        // Check if highlighting is disabled via chart options
-        if (chart.options.plugins.currentHourHighlighter?.disabled === true) {
-            return;
-        }
-        
-        const currentHour = new Date().getHours();
-        const ctx = chart.ctx;
-        
-        // Find the current hour bar
-        const hourIndex = chart.data.labels.findIndex(
-            label => parseInt(label) === currentHour
-        );
-        
-        if (hourIndex === -1) return;
-        
-        // Get vertical dimensions from the first dataset
-        let meta = chart.getDatasetMeta(0);
-        if (!meta.data || !meta.data[hourIndex]) return;
-        
-        const bar = meta.data[hourIndex];
-        const x = bar.x;
-        const width = bar.width;
-        
-        // Calculate full height of the stack
-        let topY = Number.MAX_VALUE;
-        let bottomY = 0;
-        
-        // Go through all datasets to find top and bottom
-        for (let i = 0; i < chart.data.datasets.length; i++) {
-            if (chart.data.datasets[i].stack !== 'stack0') continue;
-            
-            const datasetMeta = chart.getDatasetMeta(i);
-            if (!datasetMeta.visible) continue;
-            
-            const dataPoint = datasetMeta.data[hourIndex];
-            if (!dataPoint) continue;
-            
-            topY = Math.min(topY, dataPoint.y);
-            bottomY = Math.max(bottomY, dataPoint.base);
-        }
-        
-        // Draw red border
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 99, 132, 1)';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(x - width/2, topY, width, bottomY - topY);
-        ctx.restore();
-    }
-});
 
 // Additional debugging code to verify the plugin is being called
 console.log('Current hour highlighter plugin registered');
@@ -192,74 +140,22 @@ const updatePriceStats = (prices) => {
     minElement.innerHTML = `<strong>Lägsta pris:</strong> ${minPrice} SEK/kWh`;
 };
 
-// Create a custom plugin to draw a red border around the entire stack for current hour
-const currentHourStackBorder = {
-    id: 'currentHourStackBorder',
-    beforeDraw: function(chart) {
-        // Check if highlighting should be disabled
-        if (chart.options.plugins.currentHourHighlighter?.disabled === true) {
-            return;
-        }
-        
-        const currentHour = new Date().getHours();
-        const ctx = chart.ctx;
-        
-        // Find the index of current hour in labels
-        const hourIndex = chart.data.labels.findIndex(
-            label => parseInt(label) === currentHour
-        );
-        
-        if (hourIndex === -1) return;
-        
-        // Get all datasets with the same stack
-        const stackedDatasets = chart.data.datasets.filter(
-            dataset => dataset.stack === 'stack0'
-        );
-        
-        if (stackedDatasets.length === 0) return;
-        
-        // Find positions for drawing border
-        let barX, barWidth, topY, bottomY;
-        let initialized = false;
-        
-        for (let i = 0; i < stackedDatasets.length; i++) {
-            const datasetIndex = chart.data.datasets.indexOf(stackedDatasets[i]);
-            const meta = chart.getDatasetMeta(datasetIndex);
-            
-            if (!meta.visible) continue;
-            
-            const bar = meta.data[hourIndex];
-            if (!bar) continue;
-            
-            if (!initialized) {
-                barX = bar.x;
-                barWidth = bar.width;
-                topY = bar.y;
-                bottomY = bar.base;
-                initialized = true;
-            } else {
-                topY = Math.min(topY, bar.y);
-                bottomY = Math.max(bottomY, bar.base);
-            }
-        }
-        
-        if (!initialized) return;
-        
-        // Draw red border around entire stack
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 0, 0, 1)'; // Pure red for better visibility
-        ctx.lineWidth = 4; // Thicker border
-        ctx.beginPath();
-        ctx.rect(barX - barWidth/2, topY, barWidth, bottomY - topY);
-        ctx.stroke();
-        ctx.restore();
-    }
-};
+
+// Clean solution: Use standard stacking but adjust data to handle negative values properly
+// This creates the visual effect you want with proper bar appearance
 
 const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, highlightCurrentHour = true) => {
     const canvas = document.getElementById('priceChart');
     canvas.height = 75;
     const ctx = canvas.getContext('2d');
+
+    // Disable old global plugins that might interfere
+    try {
+        Chart.unregister('currentHourHighlighter');
+        Chart.unregister('currentHourStackBorder');
+    } catch (e) {
+        // Plugins might not be registered, ignore error
+    }
 
     if (window.priceChart.chartInstance) {
         window.priceChart.chartInstance.destroy();
@@ -288,14 +184,12 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     
     // Get colors for components
     const getComponentColors = (hour, isCurrentHour, componentIndex) => {
-        // Base colors for the three components (dark blue, medium blue, light blue)
         const baseColors = [
             'rgba(13, 71, 161, 0.7)',   // Spot price - darker blue
             'rgba(25, 118, 210, 0.7)',  // Sales - medium blue
             'rgba(66, 165, 245, 0.7)'   // Distribution - light blue
         ];
         
-        // Return slightly more vibrant colors for the current hour
         if (highlightCurrentHour && hour === currentHour) {
             const brighterColors = [
                 'rgba(13, 71, 161, 0.85)',   // Spot price - slightly brighter
@@ -308,61 +202,46 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         }
     };
 
-    // Component 1: Spot price with VAT
+    // Calculate component values
     const spotPricesWithVAT = spotPricesRaw.map((price) => {
-        return (price * (1 + VAT_RATE)).toFixed(4);
+        return price * (1 + VAT_RATE);
     });
 
-    // Component 2: Sales costs with VAT
-    const salesCostsWithVAT = spotPricesRaw.map(() => {
-        return (TOTAL_SALES * (1 + VAT_RATE)).toFixed(4);
-    });
+    const salesCostWithVAT = TOTAL_SALES * (1 + VAT_RATE);
+    const distributionCostWithVAT = TOTAL_DISTRIBUTION * (1 + VAT_RATE);
 
-    // Component 3: Distribution costs with VAT
-    const distributionCostsWithVAT = spotPricesRaw.map(() => {
-        return (TOTAL_DISTRIBUTION * (1 + VAT_RATE)).toFixed(4);
-    });
+    // CLEAN SOLUTION: Single dataset with calculated total values and custom drawing
+    // This gives us proper thick bars while showing the cost breakdown
+    
+    // Calculate total prices for the main bars
+    const totalPrices = spotPricesWithVAT.map(spotPrice => 
+        spotPrice + salesCostWithVAT + distributionCostWithVAT
+    );
 
-    // Create datasets for stacked bar chart with enhanced highlighting
     const datasets = [
         {
-            label: 'Spotpris',
-            data: spotPricesWithVAT,
-            backgroundColor: labels.map((label) => {
+            label: 'Total kostnad',
+            data: totalPrices,
+            backgroundColor: labels.map((label, index) => {
                 const hour = parseInt(label);
-                return getComponentColors(hour, hour === currentHour, 0);
+                const spotPrice = spotPricesWithVAT[index];
+                
+                // Create gradient effect based on spot price contribution
+                if (spotPrice < 0) {
+                    // Mostly sales/distribution when spot is negative
+                    return highlightCurrentHour && hour === currentHour ? 
+                        'rgba(25, 118, 210, 0.85)' : 'rgba(25, 118, 210, 0.7)';
+                } else if (spotPrice > salesCostWithVAT + distributionCostWithVAT) {
+                    // Mostly spot price when it's high
+                    return getComponentColors(hour, hour === currentHour, 0);
+                } else {
+                    // Mixed - use medium blue
+                    return getComponentColors(hour, hour === currentHour, 1);
+                }
             }),
             borderColor: 'rgba(13, 71, 161, 0.8)',
             borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'stack0',
-            order: 1
-        },
-        {
-            label: 'Försäljning',
-            data: salesCostsWithVAT,
-            backgroundColor: labels.map((label) => {
-                const hour = parseInt(label);
-                return getComponentColors(hour, hour === currentHour, 1);
-            }),
-            borderColor: 'rgba(25, 118, 210, 0.8)',
-            borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'stack0',
-            order: 2
-        },
-        {
-            label: 'Distribution',
-            data: distributionCostsWithVAT,
-            backgroundColor: labels.map((label) => {
-                const hour = parseInt(label);
-                return getComponentColors(hour, hour === currentHour, 2);
-            }),
-            borderColor: 'rgba(66, 165, 245, 0.8)',
-            borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'stack0',
-            order: 3
+            yAxisID: 'y'
         }
     ];
 
@@ -381,9 +260,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
             yAxisID: 'y1',
-            // Not part of the stack
-            stack: 'consumption',
-            // Use negative order to ensure it's drawn on top
             order: -1
         });
     }
@@ -403,37 +279,36 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                         padding: 15
                     }
                 },
-                title: { display: true, text: 'El-spotpris - Kostnadsfördelning' },
+                title: { display: true, text: 'El-spotpris - Total kostnad per timme' },
                 annotation: { annotations },
                 tooltip: {
                     callbacks: {
-                        // Add a custom footer to show total price
-                        footer: (tooltipItems) => {
-                            // Calculate total from all stacks for this data point
-                            const index = tooltipItems[0].dataIndex;
-                            let total = 0;
+                        label: function(context) {
+                            const dataIndex = context.dataIndex;
+                            const spotPrice = spotPricesWithVAT[dataIndex];
+                            const total = totalPrices[dataIndex];
                             
-                            // Sum all components that are in the price stack
-                            tooltipItems.forEach(item => {
-                                if (item.dataset.stack === 'stack0') {
-                                    total += parseFloat(item.raw);
-                                }
-                            });
-                            
-                            return `Totalt: ${total.toFixed(2)} SEK/kWh`;
+                            if (context.datasetIndex === 0) {
+                                // Main cost breakdown
+                                return [
+                                    `Spotpris: ${spotPrice.toFixed(4)} SEK/kWh`,
+                                    `Försäljning: ${salesCostWithVAT.toFixed(4)} SEK/kWh`,
+                                    `Distribution: ${distributionCostWithVAT.toFixed(4)} SEK/kWh`,
+                                    `Total: ${total.toFixed(4)} SEK/kWh`
+                                ];
+                            } else {
+                                // Consumption line
+                                return `${context.dataset.label}: ${context.parsed.y} kWh`;
+                            }
                         }
                     }
                 },
-                // Add control flag for current hour highlighting
                 currentHourHighlighter: {
                     disabled: !highlightCurrentHour
-                },
-                // Explicitly register the custom plugin
-                currentHourStackBorder
+                }
             },
             scales: {
                 y: {
-                    stacked: true, // Enable stacking on the price axis
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'SEK/kWh' },
@@ -447,11 +322,88 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     display: showConsumption
                 },
                 x: {
-                    stacked: true, // Enable stacking on the x-axis
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
                 }
             }
-        }
+        },
+        // Add custom plugin to draw cost breakdown segments
+        plugins: [{
+            id: 'costBreakdown',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                
+                meta.data.forEach((bar, index) => {
+                    const spotPrice = spotPricesWithVAT[index];
+                    const salesEnd = spotPrice + salesCostWithVAT;
+                    const totalPrice = totalPrices[index];
+                    
+                    const x = bar.x;
+                    const width = bar.width;
+                    const bottom = bar.base;
+                    const top = bar.y;
+                    const totalHeight = bottom - top;
+                    
+                    // Calculate segment heights based on proportions
+                    const spotHeight = (spotPrice / totalPrice) * totalHeight;
+                    const salesHeight = (salesCostWithVAT / totalPrice) * totalHeight;
+                    const distributionHeight = (distributionCostWithVAT / totalPrice) * totalHeight;
+                    
+                    let currentY = bottom;
+                    
+                    // Draw spot price segment
+                    if (spotPrice !== 0) {
+                        ctx.fillStyle = getComponentColors(parseInt(labels[index]), 
+                            highlightCurrentHour && parseInt(labels[index]) === currentHour, 0);
+                        ctx.fillRect(x - width/2, currentY - Math.abs(spotHeight), width, Math.abs(spotHeight));
+                        currentY -= spotHeight;
+                    }
+                    
+                    // Draw sales segment
+                    ctx.fillStyle = getComponentColors(parseInt(labels[index]), 
+                        highlightCurrentHour && parseInt(labels[index]) === currentHour, 1);
+                    ctx.fillRect(x - width/2, currentY - salesHeight, width, salesHeight);
+                    currentY -= salesHeight;
+                    
+                    // Draw distribution segment
+                    ctx.fillStyle = getComponentColors(parseInt(labels[index]), 
+                        highlightCurrentHour && parseInt(labels[index]) === currentHour, 2);
+                    ctx.fillRect(x - width/2, currentY - distributionHeight, width, distributionHeight);
+                });
+            }
+        }, {
+            id: 'currentHourHighlight',
+            afterDatasetsDraw(chart) {
+                // Only draw if highlighting is enabled
+                if (!highlightCurrentHour) return;
+                
+                const currentHour = new Date().getHours();
+                const ctx = chart.ctx;
+                
+                // Find the current hour bar
+                const hourIndex = chart.data.labels.findIndex(
+                    label => parseInt(label) === currentHour
+                );
+                
+                if (hourIndex === -1) return;
+                
+                const meta = chart.getDatasetMeta(0);
+                if (!meta.data || !meta.data[hourIndex]) return;
+                
+                const bar = meta.data[hourIndex];
+                const x = bar.x;
+                const width = bar.width;
+                const top = bar.y;
+                const bottom = bar.base;
+                
+                // Draw red border around the entire bar
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 99, 132, 1)'; // Match the EV line color
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x - width/2, top, width, bottom - top);
+                ctx.restore();
+            }
+        }]
     });
 };
 
