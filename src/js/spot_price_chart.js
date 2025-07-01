@@ -185,7 +185,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     // Get colors for components
     const getComponentColors = (hour, isCurrentHour, componentIndex) => {
         const baseColors = [
-            'rgba(1, 8, 19, 0.89)',   // Spot price - dark blue
+            'rgba(13, 71, 161, 0.8)',   // Spot price - dark blue
             'rgba(25, 118, 210, 0.8)',  // Sales - medium blue  
             'rgba(66, 165, 245, 0.8)'   // Distribution - light blue
         ];
