@@ -227,7 +227,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         }
     ];
 
-    // Add consumption dataset if needed
     if (showConsumption) {
         datasets.push({
             label: 'Förbrukning (kWh)',
@@ -242,7 +241,9 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
             yAxisID: 'y1',
-            order: -1 // Ensure line is drawn on top
+            order: -1, // Ensure line is drawn on top
+            // Simplest possible gap configuration
+            spanGaps: false
         });
     }
 
@@ -263,7 +264,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                         generateLabels: function(chart) {
                             const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
                             
-                            // Replace the first dataset legend with our custom component legends
+                            // Create custom legend for cost components
                             const customLegend = [
                                 {
                                     text: 'Spotpris',
@@ -291,9 +292,25 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                 }
                             ];
                             
-                            // Add consumption legend if it exists
-                            if (original.length > 1) {
-                                customLegend.push(original[1]); // Add the line dataset legend
+                            // Add consumption legend if the line dataset exists
+                            if (showConsumption && original.length > 1) {
+                                // Find the consumption dataset in the original legends
+                                const consumptionLegend = original.find(item => 
+                                    item.text && (item.text.includes('Förbrukning') || item.datasetIndex === 1)
+                                );
+                                
+                                if (consumptionLegend) {
+                                    // Add the consumption legend with line styling
+                                    customLegend.push({
+                                        text: consumptionLegend.text,
+                                        fillStyle: consumptionLegend.fillStyle,
+                                        strokeStyle: consumptionLegend.strokeStyle || 'rgba(255, 99, 132, 1)',
+                                        lineWidth: 3, // Thicker line to show it's a line dataset
+                                        hidden: consumptionLegend.hidden || false,
+                                        index: consumptionLegend.index || 1,
+                                        pointStyle: 'line' // Show as line in legend
+                                    });
+                                }
                             }
                             
                             return customLegend;
@@ -426,20 +443,84 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         }]
     });
 };
+// Replace your energyDataReceived event handler with this version that properly handles the new format:
 
-// Event handler for energy consumption data
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
     if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
-        let energyData = e.detail;
+        const rawData = e.detail;
         const selectedValue = Number(selector.value);
         
-        if (selectedValue === 0) {
-            const currentHour = new Date().getHours();
-            energyData = energyData.slice(0, currentHour);
+        let energyData;
+        
+        // Check for new format FIRST (object with hourly_usage property)
+        if (rawData && typeof rawData === 'object' && rawData.hourly_usage && Array.isArray(rawData.hourly_usage)) {
+            console.log('Processing NEW FORMAT with hourly_usage array length:', rawData.hourly_usage.length);
+            
+            // Initialize 24-hour array with NaN
+            energyData = new Array(24).fill(NaN);
+            
+            // Map each hour's data to the correct position using the hour property
+            rawData.hourly_usage.forEach(hourData => {
+                const hour = hourData.hour;
+                if (hour >= 0 && hour < 24) {
+                    energyData[hour] = hourData.usage_kwh;
+                }
+            });
+            
+            console.log('=== DEBUGGING NEW FORMAT ===');
+            console.log('Raw hourly_usage:', rawData.hourly_usage.map(h => `Hour ${h.hour}: ${h.usage_kwh}`));
+            console.log('Final energyData:', energyData);
+            console.log('Values at positions 13,14:', energyData[13], energyData[14]);
+            console.log('Type of values at 13,14:', typeof energyData[13], typeof energyData[14]);
+            console.log('Available hours:', rawData.hourly_usage.map(h => h.hour));
+            console.log('Missing hours:', [13, 14].filter(h => !rawData.hourly_usage.find(item => item.hour === h)));
+            
+        } else if (Array.isArray(rawData)) {
+            console.log('Processing OLD FORMAT array with length:', rawData.length);
+            
+            // Handle old format logic (19 or 20 element arrays)
+            if (rawData.length === 19 || rawData.length === 20) {
+                // Initialize 24-hour array with NaN
+                energyData = new Array(24).fill(NaN);
+                
+                // Map based on the assumption that hours 13-14 are missing
+                // Hours 0-12 (indices 0-12 in rawData)
+                for (let i = 0; i <= 12; i++) {
+                    energyData[i] = rawData[i];
+                }
+                
+                // Hours 15+ (indices 13+ in rawData map to hours 15+)
+                for (let i = 13; i < rawData.length; i++) {
+                    const hour = i + 2; // Add 2 to skip missing hours 13,14
+                    if (hour < 24) {
+                        energyData[hour] = rawData[i];
+                    }
+                }
+                
+                console.log('=== DEBUGGING OLD FORMAT ===');
+                console.log('Final energyData:', energyData);
+                console.log('Values at positions 13,14:', energyData[13], energyData[14]);
+                
+            } else {
+                // For other array lengths, use as-is (backward compatibility)
+                energyData = rawData;
+            }
+        } else {
+            // Handle other data formats if needed
+            energyData = rawData || [];
         }
         
-        const totalEnergy = energyData.reduce((sum, val) => sum + Number(val), 0);
+        // For today's view, truncate to current hour (but preserve gaps)
+        if (selectedValue === 0) {
+            const currentHour = new Date().getHours();
+            energyData = energyData.slice(0, currentHour + 1);
+        }
+        
+        // Calculate total energy (excluding NaN values)
+        const totalEnergy = energyData
+            .filter(val => !isNaN(val) && val !== null && val !== undefined)
+            .reduce((sum, val) => sum + Number(val), 0);
         
         // Find the consumption dataset (it's the line dataset)
         const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
@@ -447,10 +528,19 @@ window.addEventListener('energyDataReceived', function(e) {
         );
         
         if (consumptionDatasetIndex !== -1) {
-            // Add to consumption dataset
+            // Update consumption dataset
             window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data = energyData;
             window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
             
+            // // DEBUGGING: Check what's actually in the chart after update
+            // console.log('Dataset data after update:', window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data);
+            // console.log('Dataset config:', {
+            //     spanGaps: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].spanGaps,
+            //     showLine: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].showLine,
+            //     type: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].type
+            // });
+            
+            // Calculate cost only for hours with both price and consumption data
             if (selectedValue === 0 || selectedValue === -1) {
                 let pricesArray = selectedValue === 0 
                     ? window.priceChart.pricesToday 
@@ -458,18 +548,19 @@ window.addEventListener('energyDataReceived', function(e) {
                 
                 if (pricesArray && pricesArray.length > 0) {
                     const prices = pricesArray.map(Number);
-                    const hoursToProcess = Math.min(energyData.length, prices.length);
                     let totalCost = 0;
                     let weightedConsumption = 0;
                     
-                    for (let i = 0; i < hoursToProcess; i++) {
-                        const consumption = Number(energyData[i]);
-                        const price = prices[i];
-                        totalCost += consumption * price;
-                        weightedConsumption += consumption;
+                    // Only process hours where both price and consumption data exist
+                    for (let i = 0; i < Math.min(energyData.length, prices.length); i++) {
+                        const consumption = energyData[i];
+                        if (!isNaN(consumption) && consumption !== null && consumption !== undefined) {
+                            const price = prices[i];
+                            totalCost += consumption * price;
+                            weightedConsumption += consumption;
+                        }
                     }
                     
-                    const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
                     const totalCostDisplay = totalCost.toFixed(2);
                     
                     // Update chart title to show the total cost
@@ -479,6 +570,9 @@ window.addEventListener('energyDataReceived', function(e) {
             }
             
             window.priceChart.chartInstance.update();
+            
+            // // DEBUGGING: Log final chart state
+            // console.log('Chart updated. Final dataset data length:', window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data.length);
         }
     }
 });
