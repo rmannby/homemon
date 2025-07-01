@@ -260,7 +260,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
             yAxisID: 'y1',
-            order: -1
+            order: -1 // Ensure line is drawn on top
         });
     }
 
@@ -407,9 +407,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     });
 };
 
+// Event handler for energy consumption data
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
-    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 3) {
+    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
         let energyData = e.detail;
         const selectedValue = Number(selector.value);
         
@@ -420,38 +421,45 @@ window.addEventListener('energyDataReceived', function(e) {
         
         const totalEnergy = energyData.reduce((sum, val) => sum + Number(val), 0);
         
-        // Add to consumption dataset (now at index 3)
-        window.priceChart.chartInstance.data.datasets[3].data = energyData;
-        window.priceChart.chartInstance.data.datasets[3].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
+        // Find the consumption dataset (it's the line dataset)
+        const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
+            dataset => dataset.type === 'line'
+        );
         
-        if (selectedValue === 0 || selectedValue === -1) {
-            let pricesArray = selectedValue === 0 
-                ? window.priceChart.pricesToday 
-                : window.priceChart.pricesYesterday;
+        if (consumptionDatasetIndex !== -1) {
+            // Add to consumption dataset
+            window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data = energyData;
+            window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
             
-            if (pricesArray && pricesArray.length > 0) {
-                const prices = pricesArray.map(Number);
-                const hoursToProcess = Math.min(energyData.length, prices.length);
-                let totalCost = 0;
-                let weightedConsumption = 0;
+            if (selectedValue === 0 || selectedValue === -1) {
+                let pricesArray = selectedValue === 0 
+                    ? window.priceChart.pricesToday 
+                    : window.priceChart.pricesYesterday;
                 
-                for (let i = 0; i < hoursToProcess; i++) {
-                    const consumption = Number(energyData[i]);
-                    const price = prices[i];
-                    totalCost += consumption * price;
-                    weightedConsumption += consumption;
+                if (pricesArray && pricesArray.length > 0) {
+                    const prices = pricesArray.map(Number);
+                    const hoursToProcess = Math.min(energyData.length, prices.length);
+                    let totalCost = 0;
+                    let weightedConsumption = 0;
+                    
+                    for (let i = 0; i < hoursToProcess; i++) {
+                        const consumption = Number(energyData[i]);
+                        const price = prices[i];
+                        totalCost += consumption * price;
+                        weightedConsumption += consumption;
+                    }
+                    
+                    const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
+                    const totalCostDisplay = totalCost.toFixed(2);
+                    
+                    // Update chart title to show the total cost
+                    window.priceChart.chartInstance.options.plugins.title.text = 
+                        `Förbrukningskostnad (${totalCostDisplay} SEK)`;
                 }
-                
-                const averagePrice = weightedConsumption > 0 ? totalCost / weightedConsumption : 0;
-                const totalCostDisplay = totalCost.toFixed(2);
-                
-                // Update chart title to show the total cost
-                window.priceChart.chartInstance.options.plugins.title.text = 
-                    `Förbrukningskostnad (${totalCostDisplay} SEK)`;
             }
+            
+            window.priceChart.chartInstance.update();
         }
-        
-        window.priceChart.chartInstance.update();
     }
 });
 
