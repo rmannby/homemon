@@ -141,8 +141,8 @@ const updatePriceStats = (prices) => {
 };
 
 
-// Clean solution: Use standard stacking but adjust data to handle negative values properly
-// This creates the visual effect you want with proper bar appearance
+// Simpler solution: Single dataset with custom legend generation
+// This ensures thick bars while providing proper legend
 
 const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, highlightCurrentHour = true) => {
     const canvas = document.getElementById('priceChart');
@@ -185,16 +185,16 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     // Get colors for components
     const getComponentColors = (hour, isCurrentHour, componentIndex) => {
         const baseColors = [
-            'rgba(13, 71, 161, 0.7)',   // Spot price - darker blue
-            'rgba(25, 118, 210, 0.7)',  // Sales - medium blue
-            'rgba(66, 165, 245, 0.7)'   // Distribution - light blue
+            'rgba(1, 8, 19, 0.89)',   // Spot price - dark blue
+            'rgba(25, 118, 210, 0.8)',  // Sales - medium blue  
+            'rgba(66, 165, 245, 0.8)'   // Distribution - light blue
         ];
         
         if (highlightCurrentHour && hour === currentHour) {
             const brighterColors = [
-                'rgba(13, 71, 161, 0.85)',   // Spot price - slightly brighter
-                'rgba(25, 118, 210, 0.85)',  // Sales - slightly brighter
-                'rgba(66, 165, 245, 0.85)'   // Distribution - slightly brighter
+                'rgba(13, 71, 161, 0.9)',   // Spot price - slightly brighter
+                'rgba(25, 118, 210, 0.9)',  // Sales - slightly brighter
+                'rgba(66, 165, 245, 0.9)'   // Distribution - slightly brighter
             ];
             return brighterColors[componentIndex];
         } else {
@@ -215,55 +215,15 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         spotPrice + salesCostWithVAT + distributionCostWithVAT
     );
 
-    // SOLUTION: Create separate datasets for proper legend while using custom drawing
-    // These datasets will have minimal data but provide the correct legend entries
-    
+    // Single dataset approach for thick bars
     const datasets = [
         {
-            label: 'Spotpris',
-            data: new Array(labels.length).fill(null), // Use null instead of 0 to make truly invisible
-            backgroundColor: 'rgba(13, 71, 161, 0.7)',
-            borderColor: 'rgba(13, 71, 161, 0.8)',
-            borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'legend', // Different stack so they don't interfere
-            order: 1,
-            pointRadius: 0, // Hide any points
-            borderWidth: 0 // Remove borders
-        },
-        {
-            label: 'Försäljning',
-            data: new Array(labels.length).fill(null), // Use null instead of 0
-            backgroundColor: 'rgba(25, 118, 210, 0.7)',
-            borderColor: 'rgba(25, 118, 210, 0.8)',
-            borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'legend', // Different stack so they don't interfere
-            order: 2,
-            pointRadius: 0,
-            borderWidth: 0
-        },
-        {
-            label: 'Distribution',
-            data: new Array(labels.length).fill(null), // Use null instead of 0
-            backgroundColor: 'rgba(66, 165, 245, 0.7)',
+            label: 'Totalkostnad',
+            data: totalPrices,
+            backgroundColor: 'rgba(66, 165, 245, 0.7)', // Will be overridden by custom drawing
             borderColor: 'rgba(66, 165, 245, 0.8)',
             borderWidth: 1,
-            yAxisID: 'y',
-            stack: 'legend', // Different stack so they don't interfere
-            order: 3,
-            pointRadius: 0,
-            borderWidth: 0
-        },
-        {
-            label: 'Total kostnad',
-            data: totalPrices,
-            backgroundColor: 'transparent', // Make invisible since we draw custom segments
-            borderColor: 'transparent',
-            borderWidth: 0,
-            yAxisID: 'y',
-            stack: 'main', // Main stack for proper bar width
-            order: 4
+            yAxisID: 'y'
         }
     ];
 
@@ -299,13 +259,48 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                         boxWidth: 12,
                         boxHeight: 12,
                         padding: 15,
-                        // Filter out the invisible "Total kostnad" from legend
-                        filter: function(item, chart) {
-                            return item.text !== 'Total kostnad';
+                        // Generate custom legend entries
+                        generateLabels: function(chart) {
+                            const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                            
+                            // Replace the first dataset legend with our custom component legends
+                            const customLegend = [
+                                {
+                                    text: 'Spotpris',
+                                    fillStyle: 'rgba(13, 71, 161, 0.8)',
+                                    strokeStyle: 'rgba(13, 71, 161, 0.9)',
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: 0
+                                },
+                                {
+                                    text: 'Försäljning',
+                                    fillStyle: 'rgba(25, 118, 210, 0.8)',
+                                    strokeStyle: 'rgba(25, 118, 210, 0.9)',
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: 1
+                                },
+                                {
+                                    text: 'Distribution',
+                                    fillStyle: 'rgba(66, 165, 245, 0.8)',
+                                    strokeStyle: 'rgba(66, 165, 245, 0.9)',
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: 2
+                                }
+                            ];
+                            
+                            // Add consumption legend if it exists
+                            if (original.length > 1) {
+                                customLegend.push(original[1]); // Add the line dataset legend
+                            }
+                            
+                            return customLegend;
                         }
                     }
                 },
-                title: { display: true, text: 'El-spotpris - Total kostnad per timme' },
+                title: { display: true, text: 'El-spotpris - Kostnadsfördelning' },
                 annotation: { annotations },
                 tooltip: {
                     callbacks: {
@@ -335,7 +330,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             },
             scales: {
                 y: {
-                    stacked: true, // Enable stacking for proper bar width
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'SEK/kWh' },
@@ -349,28 +343,19 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     display: showConsumption
                 },
                 x: {
-                    stacked: true, // Enable stacking for proper bar width
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                }
-            },
-            // Explicit bar width control
-            elements: {
-                bar: {
-                    categoryPercentage: 1.0, // Width of each category (hour) - closer to 1.0 = wider
-                    barPercentage: 0.95       // Width of bars within category - 1.0 = full width
                 }
             }
         },
-        // Add custom plugin to draw cost breakdown segments
+        // Custom plugins for drawing segments and highlighting
         plugins: [{
             id: 'costBreakdown',
             beforeDatasetsDraw(chart) {
                 const ctx = chart.ctx;
-                const meta = chart.getDatasetMeta(3); // Use the "Total kostnad" dataset for positioning
+                const meta = chart.getDatasetMeta(0);
                 
                 meta.data.forEach((bar, index) => {
                     const spotPrice = spotPricesWithVAT[index];
-                    const salesEnd = spotPrice + salesCostWithVAT;
                     const totalPrice = totalPrices[index];
                     
                     const x = bar.x;
@@ -422,7 +407,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 
                 if (hourIndex === -1) return;
                 
-                const meta = chart.getDatasetMeta(3); // Use the "Total kostnad" dataset
+                const meta = chart.getDatasetMeta(0);
                 if (!meta.data || !meta.data[hourIndex]) return;
                 
                 const bar = meta.data[hourIndex];
@@ -433,7 +418,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 
                 // Draw red border around the entire bar
                 ctx.save();
-                ctx.strokeStyle = 'rgba(255, 99, 132, 1)'; // Match the EV line color
+                ctx.strokeStyle = 'rgba(255, 99, 132, 1)';
                 ctx.lineWidth = 4;
                 ctx.strokeRect(x - width/2, top, width, bottom - top);
                 ctx.restore();
