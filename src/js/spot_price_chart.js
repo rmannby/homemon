@@ -447,133 +447,80 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
 
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
-    if (selector && window.priceChart.chartInstance && window.priceChart.chartInstance.data.datasets.length > 1) {
-        const rawData = e.detail;
-        const selectedValue = Number(selector.value);
-        
-        let energyData;
-        
-        // Check for new format FIRST (object with hourly_usage property)
-        if (rawData && typeof rawData === 'object' && rawData.hourly_usage && Array.isArray(rawData.hourly_usage)) {
-            console.log('Processing NEW FORMAT with hourly_usage array length:', rawData.hourly_usage.length);
-            
-            // Initialize 24-hour array with NaN
-            energyData = new Array(24).fill(NaN);
-            
-            // Map each hour's data to the correct position using the hour property
-            rawData.hourly_usage.forEach(hourData => {
-                const hour = hourData.hour;
-                if (hour >= 0 && hour < 24) {
-                    energyData[hour] = hourData.usage_kwh;
-                }
-            });
-            
-            console.log('=== DEBUGGING NEW FORMAT ===');
-            console.log('Raw hourly_usage:', rawData.hourly_usage.map(h => `Hour ${h.hour}: ${h.usage_kwh}`));
-            console.log('Final energyData:', energyData);
-            console.log('Values at positions 13,14:', energyData[13], energyData[14]);
-            console.log('Type of values at 13,14:', typeof energyData[13], typeof energyData[14]);
-            console.log('Available hours:', rawData.hourly_usage.map(h => h.hour));
-            console.log('Missing hours:', [13, 14].filter(h => !rawData.hourly_usage.find(item => item.hour === h)));
-            
-        } else if (Array.isArray(rawData)) {
-            console.log('Processing OLD FORMAT array with length:', rawData.length);
-            
-            // Handle old format logic (19 or 20 element arrays)
-            if (rawData.length === 19 || rawData.length === 20) {
-                // Initialize 24-hour array with NaN
-                energyData = new Array(24).fill(NaN);
-                
-                // Map based on the assumption that hours 13-14 are missing
-                // Hours 0-12 (indices 0-12 in rawData)
-                for (let i = 0; i <= 12; i++) {
-                    energyData[i] = rawData[i];
-                }
-                
-                // Hours 15+ (indices 13+ in rawData map to hours 15+)
-                for (let i = 13; i < rawData.length; i++) {
-                    const hour = i + 2; // Add 2 to skip missing hours 13,14
-                    if (hour < 24) {
-                        energyData[hour] = rawData[i];
+    if (!selector || !window.priceChart.chartInstance || window.priceChart.chartInstance.data.datasets.length <= 1) {
+        return;
+    }
+
+    const rawData = e.detail;
+    const selectedValue = Number(selector.value);
+
+    // Ensure rawData is in the expected format
+    if (!rawData || typeof rawData !== 'object' || !Array.isArray(rawData.hourly_usage)) {
+        console.error('Received energy data in an unexpected format:', rawData);
+        return;
+    }
+
+    // Initialize a 24-hour array with NaN to represent gaps
+    const energyData = new Array(24).fill(NaN);
+
+    // Map each hour's data to the correct position in the array
+    rawData.hourly_usage.forEach(hourData => {
+        const hour = hourData.hour;
+        if (hour >= 0 && hour < 24) {
+            energyData[hour] = hourData.usage_kwh;
+        }
+    });
+
+    // For today's view, only show data up to the current hour, but preserve gaps
+    let displayData = energyData;
+    if (selectedValue === 0) {
+        const currentHour = new Date().getHours();
+        // Create a new array for today, ensuring future hours are not displayed
+        displayData = energyData.slice(0, currentHour + 1);
+    }
+
+    // Calculate total energy consumption from the valid data points
+    const totalEnergy = displayData
+        .filter(val => !isNaN(val) && val !== null)
+        .reduce((sum, val) => sum + Number(val), 0);
+
+    // Find the consumption dataset (it's the line chart)
+    const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
+        dataset => dataset.type === 'line'
+    );
+
+    if (consumptionDatasetIndex !== -1) {
+        // Update the chart's data and label
+        const consumptionDataset = window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex];
+        consumptionDataset.data = displayData;
+        consumptionDataset.label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
+
+        // Calculate the total cost for the displayed period
+        if (selectedValue === 0 || selectedValue === -1) {
+            const pricesArray = selectedValue === 0 
+                ? window.priceChart.pricesToday 
+                : window.priceChart.pricesYesterday;
+
+            if (pricesArray && pricesArray.length > 0) {
+                const prices = pricesArray.map(Number);
+                let totalCost = 0;
+
+                // Only calculate cost for hours where both price and consumption data exist
+                for (let i = 0; i < Math.min(displayData.length, prices.length); i++) {
+                    const consumption = displayData[i];
+                    if (!isNaN(consumption) && consumption !== null) {
+                        totalCost += consumption * prices[i];
                     }
                 }
                 
-                console.log('=== DEBUGGING OLD FORMAT ===');
-                console.log('Final energyData:', energyData);
-                console.log('Values at positions 13,14:', energyData[13], energyData[14]);
-                
-            } else {
-                // For other array lengths, use as-is (backward compatibility)
-                energyData = rawData;
+                // Update chart title to show the total cost
+                window.priceChart.chartInstance.options.plugins.title.text = 
+                    `Förbrukningskostnad (${totalCost.toFixed(2)} SEK)`;
             }
-        } else {
-            // Handle other data formats if needed
-            energyData = rawData || [];
         }
-        
-        // For today's view, truncate to current hour (but preserve gaps)
-        if (selectedValue === 0) {
-            const currentHour = new Date().getHours();
-            energyData = energyData.slice(0, currentHour + 1);
-        }
-        
-        // Calculate total energy (excluding NaN values)
-        const totalEnergy = energyData
-            .filter(val => !isNaN(val) && val !== null && val !== undefined)
-            .reduce((sum, val) => sum + Number(val), 0);
-        
-        // Find the consumption dataset (it's the line dataset)
-        const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
-            dataset => dataset.type === 'line'
-        );
-        
-        if (consumptionDatasetIndex !== -1) {
-            // Update consumption dataset
-            window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data = energyData;
-            window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
-            
-            // // DEBUGGING: Check what's actually in the chart after update
-            // console.log('Dataset data after update:', window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data);
-            // console.log('Dataset config:', {
-            //     spanGaps: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].spanGaps,
-            //     showLine: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].showLine,
-            //     type: window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].type
-            // });
-            
-            // Calculate cost only for hours with both price and consumption data
-            if (selectedValue === 0 || selectedValue === -1) {
-                let pricesArray = selectedValue === 0 
-                    ? window.priceChart.pricesToday 
-                    : window.priceChart.pricesYesterday;
-                
-                if (pricesArray && pricesArray.length > 0) {
-                    const prices = pricesArray.map(Number);
-                    let totalCost = 0;
-                    let weightedConsumption = 0;
-                    
-                    // Only process hours where both price and consumption data exist
-                    for (let i = 0; i < Math.min(energyData.length, prices.length); i++) {
-                        const consumption = energyData[i];
-                        if (!isNaN(consumption) && consumption !== null && consumption !== undefined) {
-                            const price = prices[i];
-                            totalCost += consumption * price;
-                            weightedConsumption += consumption;
-                        }
-                    }
-                    
-                    const totalCostDisplay = totalCost.toFixed(2);
-                    
-                    // Update chart title to show the total cost
-                    window.priceChart.chartInstance.options.plugins.title.text = 
-                        `Förbrukningskostnad (${totalCostDisplay} SEK)`;
-                }
-            }
-            
-            window.priceChart.chartInstance.update();
-            
-            // // DEBUGGING: Log final chart state
-            // console.log('Chart updated. Final dataset data length:', window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex].data.length);
-        }
+
+        // Refresh the chart
+        window.priceChart.chartInstance.update();
     }
 });
 
