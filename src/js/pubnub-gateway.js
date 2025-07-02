@@ -30,9 +30,8 @@ document.addEventListener('DOMContentLoaded', function () {
           if (message && (message.data_type === 'hourly_energy_import' || 
                         message.data_type === 'hourly_energy_update')) {
               console.log('Processing energy data:', message);
-              const usageData = message.hourly_usage.map(hour => hour.usage_kwh);
               const event = new CustomEvent('energyDataReceived', { 
-                  detail: usageData 
+                  detail: message 
               });
               window.dispatchEvent(event);
           } else {

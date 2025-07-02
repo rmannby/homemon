@@ -447,23 +447,19 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
 
 window.addEventListener('energyDataReceived', function(e) {
     const selector = document.getElementById('priceSelector');
-    if (!selector || !window.priceChart.chartInstance || window.priceChart.chartInstance.data.datasets.length <= 1) {
+    if (!selector || !window.priceChart.chartInstance) {
         return;
     }
 
     const rawData = e.detail;
     const selectedValue = Number(selector.value);
 
-    // Ensure rawData is in the expected format
     if (!rawData || typeof rawData !== 'object' || !Array.isArray(rawData.hourly_usage)) {
         console.error('Received energy data in an unexpected format:', rawData);
         return;
     }
 
-    // Initialize a 24-hour array with NaN to represent gaps
     const energyData = new Array(24).fill(NaN);
-
-    // Map each hour's data to the correct position in the array
     rawData.hourly_usage.forEach(hourData => {
         const hour = hourData.hour;
         if (hour >= 0 && hour < 24) {
@@ -471,31 +467,25 @@ window.addEventListener('energyDataReceived', function(e) {
         }
     });
 
-    // For today's view, only show data up to the current hour, but preserve gaps
     let displayData = energyData;
     if (selectedValue === 0) {
         const currentHour = new Date().getHours();
-        // Create a new array for today, ensuring future hours are not displayed
         displayData = energyData.slice(0, currentHour + 1);
     }
 
-    // Calculate total energy consumption from the valid data points
     const totalEnergy = displayData
         .filter(val => !isNaN(val) && val !== null)
         .reduce((sum, val) => sum + Number(val), 0);
 
-    // Find the consumption dataset (it's the line chart)
     const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
         dataset => dataset.type === 'line'
     );
 
     if (consumptionDatasetIndex !== -1) {
-        // Update the chart's data and label
         const consumptionDataset = window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex];
         consumptionDataset.data = displayData;
         consumptionDataset.label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
 
-        // Calculate the total cost for the displayed period
         if (selectedValue === 0 || selectedValue === -1) {
             const pricesArray = selectedValue === 0 
                 ? window.priceChart.pricesToday 
@@ -505,7 +495,6 @@ window.addEventListener('energyDataReceived', function(e) {
                 const prices = pricesArray.map(Number);
                 let totalCost = 0;
 
-                // Only calculate cost for hours where both price and consumption data exist
                 for (let i = 0; i < Math.min(displayData.length, prices.length); i++) {
                     const consumption = displayData[i];
                     if (!isNaN(consumption) && consumption !== null) {
@@ -513,13 +502,11 @@ window.addEventListener('energyDataReceived', function(e) {
                     }
                 }
                 
-                // Update chart title to show the total cost
                 window.priceChart.chartInstance.options.plugins.title.text = 
                     `Förbrukningskostnad (${totalCost.toFixed(2)} SEK)`;
             }
         }
 
-        // Refresh the chart
         window.priceChart.chartInstance.update();
     }
 });
