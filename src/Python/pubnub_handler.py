@@ -28,7 +28,10 @@ class PubNubHandler:
             self.handler = handler
 
         def status(self, pubnub, status):
-            pass
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')                                                                      │
+            print(f"[{timestamp}] PubNub Status Event: {status.category}")                                                                │
+            if status.is_error():
+                print(f"[{timestamp}] PubNub Error: {status.error_data.information}")
 
         def presence(self, pubnub, presence):
             pass
