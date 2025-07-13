@@ -69,6 +69,7 @@ class Gateway:
             success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
             
             if success:
+                print(f"[{timestamp}] InfluxDB query for hourly energy successful.")
                 hourly_data = []
                 total_usage = 0
                 
@@ -112,6 +113,8 @@ class Gateway:
                 }
                 print(f"[{timestamp}] Query error:")
                 print(f"└── {result}")
+            else:
+                print(f"[{timestamp}] InfluxDB query for hourly energy failed: {result}")
             
             self.pubnub_handler.publish_data(response, response_channel)
             

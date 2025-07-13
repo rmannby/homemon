@@ -25,6 +25,8 @@ class InfluxDBHandler:
             result = self.client.query(query)
             return True, list(result.get_points())
         except Exception as e:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] Error executing InfluxDB query: {e}")
             return False, f"Query execution failed: {str(e)}"
 
     def store_energy_data(self, data: Dict[str, Any]) -> bool:
