@@ -1,0 +1,18 @@
+[2025-07-13 13:51:58] XBee message received
+[2025-07-13 13:51:58] Processing living room data
+└── Living room temp: 23.27°C
+[2025-07-13 13:51:58] Raw message received: {'type': 'query_request', 'query_type': 'hourly_energy', 'day_offset': 0, 'response_channel': 'Channel-Query'}
+[2025-07-13 13:51:58] Message Type: query_request
+[2025-07-13 13:51:58] Query Type: hourly_energy
+[2025-07-13 13:51:58] Processing hourly energy query:
+├── Day Offset: 0
+└── Response Channel: Channel-Query
+├── Query Start (UTC): 2025-07-12T23:00:00Z
+└── Query End (UTC): 2025-07-13T23:00:00Z
+[2025-07-13 13:51:58] Query results:
+├── Day Offset: 0
+├── Data Points: 13
+├── Time Range: 2025-07-13T00:00:00+01:00 to 2025-07-13T12:00:00+01:00
+├── Total Usage: 12.7 kWh
+└── Average Hourly: 0.98 kWh
+
