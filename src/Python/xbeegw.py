@@ -113,7 +113,6 @@ class Gateway:
                 }
                 print(f"[{timestamp}] Query error:")
                 print(f"└── {result}")
-            else:
                 print(f"[{timestamp}] InfluxDB query for hourly energy failed: {result}")
             
             self.pubnub_handler.publish_data(response, response_channel)

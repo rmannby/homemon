@@ -1,0 +1,90 @@
+✦ Okay, I understand the problem. The hourly_energy query requests from the frontend stop being processed by xbeegw.py after a few days,
+  while other PubNub messages (like temperature data) continue to work. Restarting xbeegw.py resolves the issue. This points to a problem
+  within the xbeegw.py application's handling of these specific requests, possibly related to an unhandled exception, a resource leak, or a
+  state issue that accumulates over time.
+
+
+  I'll start by examining the handle_pubnub_message method in xbeegw.py and the get_hourly_energy_usage method in influxdb_handler.py for
+  potential issues.
+
+
+  First, I'll read the content of src/Python/influxdb_handler.py.
+ ╭─────────────────────────────────────────────╮
+ │ ✔  ReadFile src\Python\influxdb_handler.py  │
+ ╰─────────────────────────────────────────────╯
+✦ The problem you're describing, where hourly_energy requests stop being processed while other PubNub messages continue, strongly suggests an
+  issue within the xbeegw.py application's handling of these specific requests. This could be due to a stale InfluxDB connection, an unhandled
+   exception, or a resource issue that accumulates over time.
+
+
+  The most probable cause is the InfluxDB connection becoming stale or dropping after a few days. The InfluxDBClient (from the influxdb
+  library, likely for InfluxDB 1.x) might not be automatically reconnecting.
+
+
+  To diagnose this, I'll add more detailed logging to xbeegw.py and influxdb_handler.py to capture information about the InfluxDB query
+  execution and any potential errors. This will help us determine if the InfluxDB query is failing and why.
+
+
+  Here's the plan:
+   1. Add logging in xbeegw.py to show the outcome of the get_hourly_energy_usage call (success/failure and result/error).
+   2. Add logging in influxdb_handler.py to specifically log any exceptions that occur during the InfluxDB query.
+
+
+  I will now apply these changes.
+ ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ✔  Edit src\Python\xbeegw.py:             success, result = ... =>             success, result = ...                              │
+ │                                                                                                                                   │
+ │    69     success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)                                       │
+ │    70                                                                                                                             │
+ │    71     if success:                                                                                                             │
+ │    72   +     print(f"[{timestamp}] InfluxDB query for hourly energy successful.")                                                │
+ │    73         hourly_data = []                                                                                                    │
+ │    74         total_usage = 0                                                                                                     │
+ │    75                                                                                                                             │
+ ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ✔  Edit src\Python\xbeegw.py:                 print(f"[{time... =>                 print(f"[{time...                              │
+ │                                                                                                                                   │
+ │    113        }                                                                                                                   │
+ │    114        print(f"[{timestamp}] Query error:")                                                                                │
+ │    115        print(f"└── {result}")                                                                                              │
+ │    116  + else:                                                                                                                   │
+ │    117  +     print(f"[{timestamp}] InfluxDB query for hourly energy failed: {result}")                                           │
+ │    118                                                                                                                            │
+ │    119    self.pubnub_handler.publish_data(response, response_channel)                                                            │
+ │    120                                                                                                                            │
+ ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ✔  Edit src\Python\influxdb_handler.py:         except Exception as e:... =>         except Exception as e:...                    │
+ │                                                                                                                                   │
+ │    25             result = self.client.query(query)                                                                               │
+ │    26             return True, list(result.get_points())                                                                          │
+ │    27         except Exception as e:                                                                                              │
+ │    28   +         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')                                                        │
+ │    29   +         print(f"[{timestamp}] Error executing InfluxDB query: {e}")                                                     │
+ │    30             return False, f"Query execution failed: {str(e)}"                                                               │
+ │    31                                                                                                                             │
+ │    32     def store_energy_data(self, data: Dict[str, Any]) -> bool:                                                              │
+ ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+✦ I've added logging to xbeegw.py and influxdb_handler.py to provide more insight into the hourly_energy query process.
+
+
+  Now, when the issue occurs again, the logs should show:
+   * In xbeegw.py: Whether the get_hourly_energy_usage call was successful or failed, and if it failed, the error message from
+     influxdb_handler.py.
+   * In influxdb_handler.py: Any exceptions that occur during the InfluxDB query execution.
+
+
+  This will help pinpoint if the problem is with the InfluxDB query itself (e.g., connection issues, query errors) or if the xbeegw.py is
+  not even attempting the query.
+
+
+  Please run the application with these changes and provide the console logs when the problem reoccurs. This will give us the necessary
+  information to further diagnose the root cause.
+
+  gemini-cli prompt:
+  The hourly_energy query requests from the frontend stop being processed by xbeegw.py after a few days, while other PubNub messages continue
+  to work. Restarting xbeegw.py temporarily resolves this.
+
+  To diagnose, I've added enhanced logging to xbeegw.py and influxdb_handler.py. When the issue recurs, please provide the console logs.
+  These logs will indicate if the InfluxDB query is failing and why, helping us pinpoint the root cause.
