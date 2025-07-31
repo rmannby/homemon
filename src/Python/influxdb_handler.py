@@ -17,9 +17,9 @@ class InfluxDBHandler:
         """Get hourly energy usage for specified time range"""
         try:
             query = f"""
-                SELECT DIFFERENCE(LAST("import_kwh")) as hourly_usage 
-                FROM energy_usage 
-                WHERE time >= '{start_time}' AND time <= '{end_time}' 
+                SELECT SPREAD("import_kwh") as hourly_usage
+                FROM energy_usage
+                WHERE time >= '{start_time}' AND time <= '{end_time}'
                 GROUP BY time(1h)
             """
             result = self.client.query(query)

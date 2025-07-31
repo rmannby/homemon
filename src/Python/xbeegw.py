@@ -20,15 +20,22 @@ class Gateway:
     def handle_pubnub_message(self, message):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{timestamp}] Raw message received: {message}")
-        
+
+        # Handle simple string messages first
+        if message == 'Connected':
+            print(f"[{timestamp}] New client connected - publishing current data")
+            current_data = self.xbee_handler.get_current_data()
+            # Publish to the main channel as response channel is not available
+            self.pubnub_handler.publish_data(current_data, PUBNUB_CHANNEL)
+            return
+
+        # Process complex messages (expected to be JSON)
         if isinstance(message, str):
             try:
-                clean_message = message.replace('Copy', '').strip()
-                message = json.loads(clean_message)
+                message = json.loads(message.replace('Copy', '').strip())
                 print(f"[{timestamp}] Parsed message: {message}")
             except json.JSONDecodeError as e:
-                print(f"[{timestamp}] JSON parse error: {e}")
-                print(f"[{timestamp}] Raw message content: {clean_message}")
+                print(f"[{timestamp}] JSON parse error: {e} for message: {message}")
                 return
 
         if not isinstance(message, dict):
@@ -116,13 +123,6 @@ class Gateway:
                 print(f"[{timestamp}] InfluxDB query for hourly energy failed: {result}")
             
             self.pubnub_handler.publish_data(response, response_channel)
-            
-        elif message == 'Connected':
-            print(f"[{timestamp}] New client connected - publishing current data")
-            current_data = self.xbee_handler.get_current_data()
-            # Get the channel from the original message's context or use a specific channel
-            response_channel = message.get('response_channel', 'RpiGate')
-            self.pubnub_handler.publish_data(current_data, response_channel)
 
     def __init__(self):
         """Initialize Gateway"""
