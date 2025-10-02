@@ -135,6 +135,7 @@ The price chart automatically handles both hourly and 15-minute electricity spot
 - **Automatic aggregation**: 15-minute data is aggregated into hourly averages for main visualization
 - **Reference bars**: Thin black bars show actual 15-minute total costs (spot + sales + distribution + VAT) overlaid on hourly averages
 - **Enhanced tooltips**: Hover over hourly bars to see both average and individual 15-minute total costs
+- **Smart consumption display**: Red consumption line excludes current hour (incomplete data) for today's view
 - **Backward compatibility**: Maintains support for hourly data format
 
 ## Troubleshooting

@@ -723,7 +723,8 @@ window.addEventListener('energyDataReceived', function(e) {
     let displayData = energyData;
     if (selectedValue === 0) {
         const currentHour = new Date().getHours();
-        displayData = energyData.slice(0, currentHour + 1);
+        // Exclude current hour from line graph (it's incomplete)
+        displayData = energyData.slice(0, currentHour);
     }
 
     const totalEnergy = displayData
