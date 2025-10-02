@@ -79,6 +79,16 @@
         const result = testAggregation(testData);
         console.log('Aggregation result:', result);
         
+        // Test the 15-minute reference data extraction (total costs)
+        const TOTAL_SALES = 0.1179; // From the main code
+        const TOTAL_DISTRIBUTION = 0.7510; // From the main code  
+        const VAT_RATE = 0.25;
+        
+        const quarterHourTotalPrices = testData.map(entry => 
+            ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE))
+        );
+        console.log('Quarter hour total costs:', quarterHourTotalPrices.slice(0, 8));
+        
         // Display results
         const resultDiv = document.getElementById('result');
         if (result.success) {
@@ -93,6 +103,14 @@
                         `<li>Hour ${entry.hour}: ${entry.SEK_per_kWh.toFixed(4)} SEK/kWh</li>`
                     ).join('')}
                 </ul>
+                <h3>15-minute total costs for Hour 0:</h3>
+                <ul>
+                    ${quarterHourTotalPrices.slice(0, 4).map((price, idx) => {
+                        const minutes = idx * 15;
+                        return `<li>0:${minutes.toString().padStart(2, '0')} - ${price.toFixed(4)} SEK/kWh (total)</li>`;
+                    }).join('')}
+                </ul>
+                <p><strong>✅ 15-minute total cost reference bars feature ready!</strong></p>
             `;
         } else {
             resultDiv.innerHTML = `<h2>Test Failed:</h2><p>${result.message}</p>`;

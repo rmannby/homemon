@@ -16,7 +16,10 @@ window.priceChart = {
     // Add storage for component prices
     spotPricesRawToday: [],
     spotPricesRawYesterday: [],
-    spotPricesRawTomorrow: []
+    spotPricesRawTomorrow: [],
+    // Add storage for 15-minute total cost data (spot + sales + distribution + VAT)
+    quarterHourSpotPrices: [], // Actually stores total costs, not just spot prices
+    quarterHourLabels: []
 };
 
 const selector = document.getElementById('priceSelector');
@@ -93,6 +96,19 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
         let labels, spotPricesRaw, prices;
         
         if (isQuarterHourly) {
+            // Calculate total cost for 15-minute data (spot + sales + distribution + VAT)
+            const quarterHourTotalPrices = data.map(entry => 
+                ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE))
+            );
+            const quarterHourLabels = data.map(entry => {
+                const date = new Date(entry.time_start);
+                return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+            });
+            
+            // Store 15-minute data globally for chart rendering
+            window.priceChart.quarterHourSpotPrices = quarterHourTotalPrices;
+            window.priceChart.quarterHourLabels = quarterHourLabels;
+            
             // Aggregate 15-minute data into hourly averages
             const hourlyData = [];
             
@@ -136,6 +152,10 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
             prices = data.map(entry => (
                 ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE)).toFixed(2)
             ));
+            
+            // Clear 15-minute data when using hourly data
+            window.priceChart.quarterHourSpotPrices = [];
+            window.priceChart.quarterHourLabels = [];
         }
 
         if (dayOffset === -1) {
@@ -263,9 +283,13 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             backgroundColor: 'rgba(66, 165, 245, 0.7)', // Will be overridden by custom drawing
             borderColor: 'rgba(66, 165, 245, 0.8)',
             borderWidth: 1,
-            yAxisID: 'y'
+            yAxisID: 'y',
+            barPercentage: 1.0,
+            categoryPercentage: 0.9
         }
     ];
+    
+    // Note: 15-minute reference bars are drawn manually via the 'quarterHourReference' plugin
 
     if (showConsumption) {
         datasets.push({
@@ -274,16 +298,18 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
             backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            borderWidth: 3,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            borderWidth: 4, // Slightly thicker for better visibility
+            pointRadius: 5,
+            pointHoverRadius: 8,
             pointBackgroundColor: 'rgba(255, 99, 132, 1)',
             pointBorderColor: '#fff',
-            pointBorderWidth: 2,
+            pointBorderWidth: 3,
             yAxisID: 'y1',
-            order: -1, // Ensure line is drawn on top
+            order: -10, // Lower order number = drawn later (on top)
             // Simplest possible gap configuration
-            spanGaps: false
+            spanGaps: false,
+            // Ensure line is always rendered on top
+            z: 1000
         });
     }
 
@@ -332,6 +358,18 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                 }
                             ];
                             
+                            // Add 15-minute reference legend if available
+                            if (window.priceChart.quarterHourSpotPrices && window.priceChart.quarterHourSpotPrices.length > 0) {
+                                customLegend.push({
+                                    text: '15-min totalkostnad',
+                                    fillStyle: 'rgba(121, 121, 128, 0.48)',
+                                    strokeStyle: 'rgba(8, 8, 8, 0.69)', 
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: 3
+                                });
+                            }
+                            
                             // Add consumption legend if the line dataset exists
                             if (showConsumption && original.length > 1) {
                                 // Find the consumption dataset in the original legends
@@ -368,12 +406,30 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                             
                             if (context.datasetIndex === 0) {
                                 // Main cost breakdown
-                                return [
-                                    `Spotpris: ${spotPrice.toFixed(4)} SEK/kWh`,
+                                const tooltipLines = [
+                                    `Spotpris (genomsnitt): ${spotPrice.toFixed(4)} SEK/kWh`,
                                     `Försäljning: ${salesCostWithVAT.toFixed(4)} SEK/kWh`,
                                     `Distribution: ${distributionCostWithVAT.toFixed(4)} SEK/kWh`,
                                     `Total: ${total.toFixed(4)} SEK/kWh`
                                 ];
+                                
+                                // Add 15-minute details if available
+                                if (window.priceChart.quarterHourSpotPrices && window.priceChart.quarterHourSpotPrices.length > 0) {
+                                    const quarterStart = dataIndex * 4;
+                                    const quarterPrices = window.priceChart.quarterHourSpotPrices.slice(quarterStart, quarterStart + 4);
+                                    
+                                    if (quarterPrices.length > 0) {
+                                        tooltipLines.push('');
+                                        tooltipLines.push('15-min totalkostnader:');
+                                        quarterPrices.forEach((price, idx) => {
+                                            const minutes = idx * 15;
+                                            const timeStr = `${dataIndex}:${minutes.toString().padStart(2, '0')}`;
+                                            tooltipLines.push(`${timeStr} - ${price.toFixed(4)} SEK/kWh`);
+                                        });
+                                    }
+                                }
+                                
+                                return tooltipLines;
                             } else {
                                 // Consumption line
                                 return `${context.dataset.label}: ${context.parsed.y} kWh`;
@@ -390,7 +446,8 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'SEK/kWh' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    suggestedMin: 0
                 },
                 y1: {
                     type: 'linear',
@@ -479,6 +536,162 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 ctx.lineWidth = 4;
                 ctx.strokeRect(x - width/2, top, width, bottom - top);
                 ctx.restore();
+            }
+        }, {
+            id: 'quarterHourReference',
+            afterDatasetsDraw(chart) {
+                // Only draw if 15-minute data is available
+                if (!window.priceChart.quarterHourSpotPrices || window.priceChart.quarterHourSpotPrices.length === 0) {
+                    return;
+                }
+                
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0); // Main dataset
+                
+                // Get chart scale info
+                const yScale = chart.scales.y;
+                
+                ctx.save();
+                
+                // Color options for 15-minute bars:
+                // Option 1: Bright Yellow/Amber (current)
+                // ctx.fillStyle = 'rgba(255, 193, 7, 0.7)';
+                // ctx.strokeStyle = 'rgba(255, 193, 7, 0.9)';
+                
+                // Option 2: Light Orange (uncomment to use)
+                // ctx.fillStyle = 'rgba(255, 152, 0, 0.7)';
+                // ctx.strokeStyle = 'rgba(255, 152, 0, 0.9)';
+                
+                // Option 3: Bright Green (uncomment to use)
+                // ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+                // ctx.strokeStyle = 'rgba(76, 175, 80, 0.9)';
+                
+                // Option 4: Light Purple (uncomment to use)
+                ctx.fillStyle = 'rgba(121, 121, 128, 0.48)';
+                ctx.strokeStyle = 'rgba(8, 8, 8, 0.69)';
+                
+                // Option 5: Cyan (uncomment to use)
+                // ctx.fillStyle = 'rgba(0, 188, 212, 0.7)';
+                // ctx.strokeStyle = 'rgba(0, 188, 212, 0.9)';
+                
+                ctx.lineWidth = 0.8;
+                
+                meta.data.forEach((bar, hourIndex) => {
+                    if (hourIndex >= 24) return; // Safety check
+                    
+                    const quarterStart = hourIndex * 4;
+                    const quarterPrices = window.priceChart.quarterHourSpotPrices.slice(quarterStart, quarterStart + 4);
+                    
+                    if (quarterPrices.length === 0) return;
+                    
+                    const barX = bar.x;
+                    const barWidth = bar.width;
+                    const quarterWidth = barWidth / 4; // Divide hour bar into 4 quarters
+                    
+                    quarterPrices.forEach((price, quarterIndex) => {
+                        if (price == null || isNaN(price)) return;
+                        
+                        // Calculate position for this quarter
+                        const quarterX = barX - (barWidth / 2) + (quarterIndex * quarterWidth) + (quarterWidth / 2);
+                        const quarterHeight = yScale.getPixelForValue(price) - yScale.getPixelForValue(0);
+                        const quarterTop = yScale.getPixelForValue(price);
+                        const quarterBottom = yScale.getPixelForValue(0);
+                        
+                        // Draw thin quarter-hour bar
+                        const thinWidth = quarterWidth * 0.6; // Make it 60% of quarter width
+                        ctx.fillRect(
+                            quarterX - (thinWidth / 2), 
+                            quarterTop, 
+                            thinWidth, 
+                            quarterBottom - quarterTop
+                        );
+                        
+                        // Optional: Draw border for better visibility
+                        ctx.strokeRect(
+                            quarterX - (thinWidth / 2), 
+                            quarterTop, 
+                            thinWidth, 
+                            quarterBottom - quarterTop
+                        );
+                    });
+                });
+                
+                ctx.restore();
+            }
+        }, {
+            id: 'dynamicYScale',
+            beforeInit(chart) {
+                // Calculate the maximum value from both hourly and 15-minute data
+                let maxValue = 0;
+                
+                if (chart.data.datasets[0] && chart.data.datasets[0].data) {
+                    maxValue = Math.max(...chart.data.datasets[0].data.map(Number));
+                }
+                
+                if (window.priceChart.quarterHourSpotPrices && window.priceChart.quarterHourSpotPrices.length > 0) {
+                    const maxQuarterHour = Math.max(...window.priceChart.quarterHourSpotPrices.map(Number));
+                    maxValue = Math.max(maxValue, maxQuarterHour);
+                }
+                
+                // Set the scale max with 10% padding
+                if (maxValue > 0) {
+                    chart.options.scales.y.max = maxValue * 1.1;
+                }
+            }
+        }, {
+            id: 'ensureLineOnTop',
+            afterDraw(chart) {
+                // Find the consumption line dataset (type: 'line')
+                const lineDatasetIndex = chart.data.datasets.findIndex(dataset => dataset.type === 'line');
+                
+                if (lineDatasetIndex !== -1 && chart.data.datasets[lineDatasetIndex].data.length > 0) {
+                    // Get the line dataset meta
+                    const lineMeta = chart.getDatasetMeta(lineDatasetIndex);
+                    
+                    // Only redraw if the line has data points
+                    if (lineMeta.data && lineMeta.data.length > 0) {
+                        const ctx = chart.ctx;
+                        const dataset = chart.data.datasets[lineDatasetIndex];
+                        
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'source-over';
+                        
+                        // Redraw the line on top
+                        ctx.strokeStyle = dataset.borderColor;
+                        ctx.lineWidth = dataset.borderWidth;
+                        ctx.beginPath();
+                        
+                        let firstPoint = true;
+                        lineMeta.data.forEach((point, index) => {
+                            if (point && !isNaN(point.x) && !isNaN(point.y) && dataset.data[index] != null) {
+                                if (firstPoint) {
+                                    ctx.moveTo(point.x, point.y);
+                                    firstPoint = false;
+                                } else {
+                                    ctx.lineTo(point.x, point.y);
+                                }
+                            }
+                        });
+                        
+                        ctx.stroke();
+                        
+                        // Redraw the points on top
+                        lineMeta.data.forEach((point, index) => {
+                            if (point && !isNaN(point.x) && !isNaN(point.y) && dataset.data[index] != null) {
+                                ctx.fillStyle = dataset.pointBackgroundColor;
+                                ctx.strokeStyle = dataset.pointBorderColor;
+                                ctx.lineWidth = dataset.pointBorderWidth;
+                                
+                                ctx.beginPath();
+                                ctx.arc(point.x, point.y, dataset.pointRadius, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.stroke();
+                            }
+                        });
+                        
+                        ctx.restore();
+                    }
+                }
             }
         }]
     });

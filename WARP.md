@@ -130,6 +130,13 @@ window.queryHourlyEnergy(0); // Today
 window.queryHourlyEnergy(-1); // Yesterday
 ```
 
+### Electricity Price Chart Features
+The price chart automatically handles both hourly and 15-minute electricity spot price data:
+- **Automatic aggregation**: 15-minute data is aggregated into hourly averages for main visualization
+- **Reference bars**: Thin black bars show actual 15-minute total costs (spot + sales + distribution + VAT) overlaid on hourly averages
+- **Enhanced tooltips**: Hover over hourly bars to see both average and individual 15-minute total costs
+- **Backward compatibility**: Maintains support for hourly data format
+
 ## Troubleshooting
 
 ### Common Issues
