@@ -85,18 +85,58 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
 
         const data = await response.json();
 
-        const labels = data.map(entry => {
-            const date = new Date(entry.time_start);
-            return `${date.getHours()}:00`;
-        });
+        // Check if data has 15-minute intervals (96 entries) or hourly (24 entries)
+        const isQuarterHourly = data.length > 50; // Assume > 50 means 15-minute intervals
+        
+        console.log(`Electricity price data: ${data.length} entries detected, ${isQuarterHourly ? 'aggregating 15-minute to hourly' : 'using hourly data directly'}`);
+        
+        let labels, spotPricesRaw, prices;
+        
+        if (isQuarterHourly) {
+            // Aggregate 15-minute data into hourly averages
+            const hourlyData = [];
+            
+            for (let hour = 0; hour < 24; hour++) {
+                // Get all 15-minute intervals for this hour
+                const quarterHourData = data.filter(entry => {
+                    const date = new Date(entry.time_start);
+                    return date.getHours() === hour;
+                });
+                
+                if (quarterHourData.length > 0) {
+                    // Calculate average spot price for this hour
+                    const avgSpotPrice = quarterHourData.reduce((sum, entry) => 
+                        sum + entry.SEK_per_kWh, 0) / quarterHourData.length;
+                    
+                    hourlyData.push({
+                        hour: hour,
+                        SEK_per_kWh: avgSpotPrice,
+                        time_start: quarterHourData[0].time_start // Use first entry's timestamp
+                    });
+                }
+            }
+            
+            // Create labels and prices from aggregated hourly data
+            labels = hourlyData.map(entry => `${entry.hour}:00`);
+            spotPricesRaw = hourlyData.map(entry => entry.SEK_per_kWh);
+            prices = hourlyData.map(entry => 
+                ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE)).toFixed(2)
+            );
+        } else {
+            // Handle original hourly data format
+            labels = data.map(entry => {
+                const date = new Date(entry.time_start);
+                return `${date.getHours()}:00`;
+            });
 
-        // Store raw spot prices for component calculations
-        const spotPricesRaw = data.map(entry => entry.SEK_per_kWh);
+            // Store raw spot prices for component calculations
+            spotPricesRaw = data.map(entry => entry.SEK_per_kWh);
 
-        // Total prices (for backwards compatibility)
-        const prices = data.map(entry => (
-            ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE)).toFixed(2)
-        ));
+            // Total prices (for backwards compatibility)
+            prices = data.map(entry => (
+                ((entry.SEK_per_kWh + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE)).toFixed(2)
+            ));
+        }
 
         if (dayOffset === -1) {
             window.priceChart.labelsYesterday = labels;

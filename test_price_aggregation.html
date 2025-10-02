@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Price Aggregation</title>
+</head>
+<body>
+    <h1>Test 15-minute to Hourly Aggregation</h1>
+    <div id="result"></div>
+
+    <script>
+        // Simulate 15-minute data (96 entries for 24 hours)
+        function generateTest15MinuteData() {
+            const data = [];
+            const baseDate = new Date('2023-10-02T00:00:00Z');
+            
+            for (let hour = 0; hour < 24; hour++) {
+                for (let quarter = 0; quarter < 4; quarter++) {
+                    const timestamp = new Date(baseDate);
+                    timestamp.setHours(hour, quarter * 15);
+                    
+                    // Simulate varying prices within the hour
+                    const basePrice = 0.5 + (hour * 0.1) + (Math.random() * 0.2);
+                    
+                    data.push({
+                        time_start: timestamp.toISOString(),
+                        SEK_per_kWh: basePrice
+                    });
+                }
+            }
+            return data;
+        }
+
+        // Copy the aggregation logic from spot_price_chart.js
+        function testAggregation(data) {
+            console.log(`Test data: ${data.length} entries`);
+            
+            const isQuarterHourly = data.length > 50;
+            console.log(`Is quarter hourly: ${isQuarterHourly}`);
+            
+            if (isQuarterHourly) {
+                const hourlyData = [];
+                
+                for (let hour = 0; hour < 24; hour++) {
+                    const quarterHourData = data.filter(entry => {
+                        const date = new Date(entry.time_start);
+                        return date.getHours() === hour;
+                    });
+                    
+                    if (quarterHourData.length > 0) {
+                        const avgSpotPrice = quarterHourData.reduce((sum, entry) => 
+                            sum + entry.SEK_per_kWh, 0) / quarterHourData.length;
+                        
+                        hourlyData.push({
+                            hour: hour,
+                            SEK_per_kWh: avgSpotPrice,
+                            time_start: quarterHourData[0].time_start
+                        });
+                    }
+                }
+                
+                console.log(`Aggregated to ${hourlyData.length} hourly entries`);
+                
+                // Create labels
+                const labels = hourlyData.map(entry => `${entry.hour}:00`);
+                console.log('Labels:', labels);
+                
+                return { success: true, hourlyData, labels };
+            }
+            
+            return { success: false, message: 'Not quarter hourly data' };
+        }
+
+        // Run the test
+        const testData = generateTest15MinuteData();
+        console.log('Generated test data:', testData.slice(0, 8)); // Show first 8 entries
+        
+        const result = testAggregation(testData);
+        console.log('Aggregation result:', result);
+        
+        // Display results
+        const resultDiv = document.getElementById('result');
+        if (result.success) {
+            resultDiv.innerHTML = `
+                <h2>Test Successful!</h2>
+                <p>Generated ${testData.length} 15-minute entries</p>
+                <p>Aggregated to ${result.hourlyData.length} hourly entries</p>
+                <p>Labels: ${result.labels.slice(0, 6).join(', ')}...</p>
+                <h3>First few hourly averages:</h3>
+                <ul>
+                    ${result.hourlyData.slice(0, 6).map(entry => 
+                        `<li>Hour ${entry.hour}: ${entry.SEK_per_kWh.toFixed(4)} SEK/kWh</li>`
+                    ).join('')}
+                </ul>
+            `;
+        } else {
+            resultDiv.innerHTML = `<h2>Test Failed:</h2><p>${result.message}</p>`;
+        }
+    </script>
+</body>
+</html>
