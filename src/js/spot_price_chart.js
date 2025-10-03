@@ -408,6 +408,8 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     mode: 'index',
                     intersect: false,
                     position: 'nearest',
+                    // Touch-friendly: auto-hide after 3 seconds on mobile
+                    events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
                     callbacks: {
                         label: function(context) {
                             const dataIndex = context.dataIndex;
@@ -629,6 +631,42 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 });
                 
                 ctx.restore();
+            }
+        }, {
+            id: 'touchFriendlyTooltip',
+            afterEvent(chart, args) {
+                const event = args.event;
+                
+                // Handle touch events
+                if (event.type === 'touchstart' || event.type === 'click') {
+                    // Clear any existing timeout
+                    if (chart._tooltipTimeout) {
+                        clearTimeout(chart._tooltipTimeout);
+                    }
+                    
+                    // If tooltip is currently shown, hide it on this tap
+                    if (chart.tooltip && chart.tooltip.opacity > 0) {
+                        chart.tooltip.setActiveElements([], {x: 0, y: 0});
+                        chart.update();
+                        return;
+                    }
+                    
+                    // Set timeout to auto-hide tooltip after 3 seconds on touch devices
+                    chart._tooltipTimeout = setTimeout(() => {
+                        if (chart.tooltip && chart.tooltip.opacity > 0) {
+                            chart.tooltip.setActiveElements([], {x: 0, y: 0});
+                            chart.update();
+                        }
+                    }, 3000);
+                }
+                
+                // Clear timeout on mouseout (desktop)
+                if (event.type === 'mouseout') {
+                    if (chart._tooltipTimeout) {
+                        clearTimeout(chart._tooltipTimeout);
+                        chart._tooltipTimeout = null;
+                    }
+                }
             }
         }, {
             id: 'dynamicYScale',
