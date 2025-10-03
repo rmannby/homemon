@@ -19,7 +19,11 @@ window.priceChart = {
     spotPricesRawTomorrow: [],
     // Add storage for 15-minute total cost data (spot + sales + distribution + VAT)
     quarterHourSpotPrices: [], // Actually stores total costs, not just spot prices
-    quarterHourLabels: []
+    quarterHourLabels: [],
+    // Store 15-minute data per day
+    quarterHourSpotPricesToday: [],
+    quarterHourSpotPricesYesterday: [],
+    quarterHourSpotPricesTomorrow: []
 };
 
 const selector = document.getElementById('priceSelector');
@@ -109,6 +113,15 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
             window.priceChart.quarterHourSpotPrices = quarterHourTotalPrices;
             window.priceChart.quarterHourLabels = quarterHourLabels;
             
+            // Also store per-day for proper switching
+            if (dayOffset === -1) {
+                window.priceChart.quarterHourSpotPricesYesterday = quarterHourTotalPrices;
+            } else if (dayOffset === 0) {
+                window.priceChart.quarterHourSpotPricesToday = quarterHourTotalPrices;
+            } else if (dayOffset === 1) {
+                window.priceChart.quarterHourSpotPricesTomorrow = quarterHourTotalPrices;
+            }
+            
             // Aggregate 15-minute data into hourly averages
             const hourlyData = [];
             
@@ -156,6 +169,15 @@ const fetchElectricityPrices = async (dayOffset = 0) => {
             // Clear 15-minute data when using hourly data
             window.priceChart.quarterHourSpotPrices = [];
             window.priceChart.quarterHourLabels = [];
+            
+            // Also clear per-day storage
+            if (dayOffset === -1) {
+                window.priceChart.quarterHourSpotPricesYesterday = [];
+            } else if (dayOffset === 0) {
+                window.priceChart.quarterHourSpotPricesToday = [];
+            } else if (dayOffset === 1) {
+                window.priceChart.quarterHourSpotPricesTomorrow = [];
+            }
         }
 
         if (dayOffset === -1) {
@@ -771,6 +793,8 @@ const updateChart = async (dayOffset) => {
     const highlightCurrentHour = (dayOffset === 0);
 
     if (dayOffset === -1) {  // Yesterday
+        // Set the correct 15-minute data for yesterday before rendering
+        window.priceChart.quarterHourSpotPrices = window.priceChart.quarterHourSpotPricesYesterday || [];
         if (window.priceChart.pricesYesterday.length === 0) {
             const result = await fetchElectricityPrices(-1);
             if (result) {
@@ -788,6 +812,8 @@ const updateChart = async (dayOffset) => {
             updatePriceStats(window.priceChart.pricesYesterday);
         }
     } else if (dayOffset === 0) {  // Today
+        // Set the correct 15-minute data for today before rendering
+        window.priceChart.quarterHourSpotPrices = window.priceChart.quarterHourSpotPricesToday || [];
         if (window.priceChart.pricesToday.length === 0) {
             const result = await fetchElectricityPrices(0);
             if (result) {
@@ -805,6 +831,8 @@ const updateChart = async (dayOffset) => {
             updatePriceStats(window.priceChart.pricesToday);
         }
     } else if (dayOffset === 1) {  // Tomorrow
+        // Set the correct 15-minute data for tomorrow before rendering
+        window.priceChart.quarterHourSpotPrices = window.priceChart.quarterHourSpotPricesTomorrow || [];
         if (window.priceChart.pricesTomorrow.length === 0) {
             const result = await fetchElectricityPrices(1);
             if (result) {
