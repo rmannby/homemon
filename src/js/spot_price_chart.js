@@ -230,12 +230,14 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             borderColor: 'rgba(255, 99, 132, 1)',
             borderWidth: 2,
             borderDash: [6, 6],
+            drawTime: 'afterDatasetsDraw', // Draw after datasets so it's on top
             label: {
                 content: '1.50 SEK - EV laddning på jobbet',
                 enabled: true,
                 position: 'end',
                 backgroundColor: 'rgba(255, 99, 132, 0.2)'
-            }
+            },
+            z: 100 // Higher z-index to ensure it's on top
         }
     };
 
@@ -319,6 +321,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: { 
                     position: 'top',
@@ -398,6 +404,10 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 title: { display: true, text: 'El-spotpris - Kostnadsfördelning' },
                 annotation: { annotations },
                 tooltip: {
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false,
+                    position: 'nearest',
                     callbacks: {
                         label: function(context) {
                             const dataIndex = context.dataIndex;
@@ -539,7 +549,9 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             }
         }, {
             id: 'quarterHourReference',
-            afterDatasetsDraw(chart) {
+            afterDatasetDraw(chart, args) {
+                // Only draw after the main bar dataset (index 0), before the line dataset
+                if (args.index !== 0) return;
                 // Only draw if 15-minute data is available
                 if (!window.priceChart.quarterHourSpotPrices || window.priceChart.quarterHourSpotPrices.length === 0) {
                     return;
@@ -636,61 +648,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 // Set the scale max with 10% padding
                 if (maxValue > 0) {
                     chart.options.scales.y.max = maxValue * 1.1;
-                }
-            }
-        }, {
-            id: 'ensureLineOnTop',
-            afterDraw(chart) {
-                // Find the consumption line dataset (type: 'line')
-                const lineDatasetIndex = chart.data.datasets.findIndex(dataset => dataset.type === 'line');
-                
-                if (lineDatasetIndex !== -1 && chart.data.datasets[lineDatasetIndex].data.length > 0) {
-                    // Get the line dataset meta
-                    const lineMeta = chart.getDatasetMeta(lineDatasetIndex);
-                    
-                    // Only redraw if the line has data points
-                    if (lineMeta.data && lineMeta.data.length > 0) {
-                        const ctx = chart.ctx;
-                        const dataset = chart.data.datasets[lineDatasetIndex];
-                        
-                        ctx.save();
-                        ctx.globalCompositeOperation = 'source-over';
-                        
-                        // Redraw the line on top
-                        ctx.strokeStyle = dataset.borderColor;
-                        ctx.lineWidth = dataset.borderWidth;
-                        ctx.beginPath();
-                        
-                        let firstPoint = true;
-                        lineMeta.data.forEach((point, index) => {
-                            if (point && !isNaN(point.x) && !isNaN(point.y) && dataset.data[index] != null) {
-                                if (firstPoint) {
-                                    ctx.moveTo(point.x, point.y);
-                                    firstPoint = false;
-                                } else {
-                                    ctx.lineTo(point.x, point.y);
-                                }
-                            }
-                        });
-                        
-                        ctx.stroke();
-                        
-                        // Redraw the points on top
-                        lineMeta.data.forEach((point, index) => {
-                            if (point && !isNaN(point.x) && !isNaN(point.y) && dataset.data[index] != null) {
-                                ctx.fillStyle = dataset.pointBackgroundColor;
-                                ctx.strokeStyle = dataset.pointBorderColor;
-                                ctx.lineWidth = dataset.pointBorderWidth;
-                                
-                                ctx.beginPath();
-                                ctx.arc(point.x, point.y, dataset.pointRadius, 0, Math.PI * 2);
-                                ctx.fill();
-                                ctx.stroke();
-                            }
-                        });
-                        
-                        ctx.restore();
-                    }
                 }
             }
         }]
