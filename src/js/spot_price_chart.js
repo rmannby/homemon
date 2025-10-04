@@ -4,11 +4,6 @@
 // Additional debugging code to verify the plugin is being called
 console.log('Current hour highlighter plugin registered');
 
-// Register the annotation plugin if available
-if (typeof Chart !== 'undefined' && Chart.registry && !Chart.registry.plugins.get('annotation')) {
-    console.warn('Annotation plugin not found - reference line will not display');
-}
-
 // Initialize global state
 window.priceChart = {
     chartInstance: null,
