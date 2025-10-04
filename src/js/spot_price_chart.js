@@ -4,6 +4,11 @@
 // Additional debugging code to verify the plugin is being called
 console.log('Current hour highlighter plugin registered');
 
+// Register the annotation plugin if available
+if (typeof Chart !== 'undefined' && Chart.registry && !Chart.registry.plugins.get('annotation')) {
+    console.warn('Annotation plugin not found - reference line will not display');
+}
+
 // Initialize global state
 window.priceChart = {
     chartInstance: null,
@@ -243,25 +248,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         window.priceChart.chartInstance.destroy();
     }
 
-    // Calculate annotation for EV charging reference price line
-    const annotations = {
-        evChargeLine: {
-            type: 'line',
-            yMin: 1.50,
-            yMax: 1.50,
-            borderColor: 'rgba(255, 99, 132, 1)',
-            borderWidth: 2,
-            borderDash: [6, 6],
-            drawTime: 'afterDatasetsDraw', // Draw after datasets so it's on top
-            label: {
-                content: '1.50 SEK - EV laddning på jobbet',
-                enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)'
-            },
-            z: 100 // Higher z-index to ensure it's on top
-        }
-    };
+    // EV charging reference price line is defined inline in plugins.annotation.annotations
 
     // Get current hour for highlighting
     const currentHour = new Date().getHours();
@@ -337,7 +324,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
         });
     }
 
-    window.priceChart.chartInstance = new Chart(ctx, {
+    const chartConfig = {
         type: 'bar',
         data: { labels, datasets },
         options: {
@@ -348,7 +335,19 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 intersect: false
             },
             plugins: {
-                legend: { 
+                annotation: {
+                    annotations: [
+                        {
+                            type: 'line',
+                            yMin: 1.5,
+                            yMax: 1.5,
+                            borderColor: 'rgb(255, 99, 132)',
+                            borderWidth: 3,
+                            borderDash: [8, 4]
+                        }
+                    ]
+                },
+                legend: {
                     position: 'top',
                     labels: {
                         boxWidth: 12,
@@ -424,7 +423,6 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     }
                 },
                 title: { display: true, text: 'El-spotpris - Kostnadsfördelning' },
-                annotation: { annotations },
                 tooltip: {
                     enabled: true,
                     mode: 'index',
@@ -481,7 +479,8 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     position: 'left',
                     title: { display: true, text: 'SEK/kWh' },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    suggestedMin: 0
+                    min: 0,
+                    beginAtZero: true
                 },
                 y1: {
                     type: 'linear',
@@ -705,13 +704,18 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     maxValue = Math.max(maxValue, maxQuarterHour);
                 }
                 
+                // Ensure annotation line (1.50) is always visible
+                maxValue = Math.max(maxValue, 1.50);
+                
                 // Set the scale max with 10% padding
                 if (maxValue > 0) {
                     chart.options.scales.y.max = maxValue * 1.1;
                 }
             }
         }]
-    });
+    };
+    
+    window.priceChart.chartInstance = new Chart(ctx, chartConfig);
 };
 // Replace your energyDataReceived event handler with this version that properly handles the new format:
 
