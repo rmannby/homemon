@@ -1,9 +1,11 @@
-from wallbox import Wallbox, Statuses
-import time
-import datetime
-from datetime import datetime as dt
 import configparser
+import datetime
 import os
+import time
+from datetime import datetime as dt
+
+from wallbox import Statuses, Wallbox
+
 
 def load_config():
     config = configparser.ConfigParser()

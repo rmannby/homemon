@@ -1,4 +1,8 @@
-import serial, time, datetime, sys
+import datetime
+import sys
+import time
+
+import serial
 from pubnub import Pubnub
 from xbee import ZigBee
 

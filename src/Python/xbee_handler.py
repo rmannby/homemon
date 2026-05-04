@@ -1,7 +1,9 @@
+from datetime import datetime
+from typing import Any, Dict
+
 import serial
 from xbee import ZigBee
-from typing import Dict, Any
-from datetime import datetime
+
 
 class XBeeHandler:
     """Handler for XBee sensor network communications"""

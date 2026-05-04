@@ -1,6 +1,7 @@
-from urllib import request
-from datetime import datetime
 import json
+from datetime import datetime
+from urllib import request
+
 
 def get_electricity_prices(date=None, price_region="SE3"):
     """

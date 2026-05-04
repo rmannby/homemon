@@ -1,6 +1,7 @@
-import subprocess
 import json
-from typing import Optional, Dict, Any
+import subprocess
+from typing import Any, Dict, Optional
+
 
 class HomeWizardHandler:
     def __init__(self, device_ip: str):
