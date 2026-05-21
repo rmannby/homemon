@@ -482,7 +482,9 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                     position: 'right',
                     title: { display: showConsumption, text: 'kWh' },
                     grid: { drawOnChartArea: false },
-                    display: showConsumption
+                    display: showConsumption,
+                    suggestedMin: 0,
+                    suggestedMax: 1
                 },
                 x: {
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
