@@ -345,12 +345,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                             value: 0,
                             borderColor: 'rgba(220, 220, 220, 0.9)',
                             borderWidth: 2,
-                            borderDash: [4, 4],
-                            label: {
-                                display: true,
-                                content: '0 kWh',
-                                position: 'start'
-                            }
+                            borderDash: [4, 4]
                         }
                     ]
                 },
