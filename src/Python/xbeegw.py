@@ -2,7 +2,7 @@
 import json
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Dict, Any, List, Tuple
 
 from config import (GATEWAY_CONFIG, HOMEWIZARD_CONFIG, INFLUX_CONFIG,
                     PUBNUB_CONFIG, XBEE_CONFIG)
@@ -17,6 +17,40 @@ PUBNUB_CHANNEL = 'RpiGate'
 DEFAULT_PRICE_REGION = "SE3"
 
 class Gateway:
+    def build_hourly_net_energy(
+        self, result: List[Dict[str, Any]], local_offset: timedelta
+    ) -> Tuple[List[Dict[str, Any]], float, float, float]:
+        """Convert hourly cumulative-meter spreads to import, export, and net energy."""
+        hourly_data = []
+        total_import = 0.0
+        total_export = 0.0
+
+        for point in result:
+            hourly_import = point.get('hourly_import_kwh')
+            hourly_export = point.get('hourly_export_kwh')
+
+            if hourly_import is None and hourly_export is None:
+                continue
+
+            import_kwh = round(float(hourly_import or 0), 3)
+            export_kwh = round(float(hourly_export or 0), 3)
+            net_kwh = round(import_kwh - export_kwh, 3)
+            point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+            local_time = point_time + local_offset
+
+            total_import += import_kwh
+            total_export += export_kwh
+            hourly_data.append({
+                'hour': local_time.hour,
+                'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
+                # Retain the existing field name for frontend compatibility.
+                'usage_kwh': net_kwh,
+                'import_kwh': import_kwh,
+                'export_kwh': export_kwh,
+                'net_kwh': net_kwh
+            })
+
+        return hourly_data, total_import, total_export, total_import - total_export
     def handle_pubnub_message(self, message):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{timestamp}] Raw message received: {message}")
@@ -77,27 +111,18 @@ class Gateway:
             
             if success:
                 print(f"[{timestamp}] InfluxDB query for hourly energy successful.")
-                hourly_data = []
-                total_usage = 0
-                
-                for point in result:
-                    if point.get('hourly_usage') is not None:
-                        point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
-                        # Adjust the hour to local time
-                        local_time = point_time + local_offset
-                        usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
-                        total_usage += usage
-                        hourly_data.append({
-                            'hour': local_time.hour,
-                            'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
-                            'usage_kwh': usage
-                        })
+                hourly_data, total_import, total_export, total_net = (
+                    self.build_hourly_net_energy(result, local_offset)
+                )
                 
                 response = {
                     'Channel': response_channel,
                     'data_type': 'hourly_energy_update',  # Changed from 'hourly_energy_import'
                     'day_offset': day_offset,
                     'hourly_usage': hourly_data,
+                    'total_import_kwh': round(total_import, 3),
+                    'total_export_kwh': round(total_export, 3),
+                    'total_net_kwh': round(total_net, 3),
                     'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 }
 
@@ -106,8 +131,9 @@ class Gateway:
                 print(f"├── Data Points: {len(hourly_data)}")
                 if hourly_data:
                     print(f"├── Time Range: {hourly_data[0]['datetime']} to {hourly_data[-1]['datetime']}")
-                    print(f"├── Total Usage: {round(total_usage, 2)} kWh")
-                    print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2)} kWh")
+                    print(f"├── Total Import: {total_import:.2f} kWh")
+                    print(f"├── Total Export: {total_export:.2f} kWh")
+                    print(f"└── Total Net: {total_net:.2f} kWh")
                 else:
                     print(f"└── No data points found")
             else:
@@ -175,34 +201,26 @@ class Gateway:
         success, result = self.influx_handler.get_hourly_energy_usage(utc_start, utc_end)
         
         if success:
-            hourly_data = []
-            total_usage = 0
-            
-            for point in result:
-                if point.get('hourly_usage') is not None:
-                    point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
-                    local_time = point_time + local_offset
-                    usage = round(point['hourly_usage'], 3) if point['hourly_usage'] > 0 else 0
-                    total_usage += usage
-                    hourly_data.append({
-                        'hour': local_time.hour,
-                        'datetime': local_time.strftime('%Y-%m-%dT%H:%M:%S+01:00'),
-                        'usage_kwh': usage
-                    })
+            hourly_data, total_import, total_export, total_net = (
+                self.build_hourly_net_energy(result, local_offset)
+            )
             
             response = {
                 'Channel': 'Channel-Query',
                 'data_type': 'hourly_energy_update',  # New data type for automatic updates
                 'day_offset': 0,
                 'hourly_usage': hourly_data,
-                'total_usage': round(total_usage, 2),
+                'total_import_kwh': round(total_import, 3),
+                'total_export_kwh': round(total_export, 3),
+                'total_net_kwh': round(total_net, 3),
                 'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
             }
             
             print(f"[{timestamp}] Publishing energy update:")
             print(f"├── Data Points: {len(hourly_data)}")
-            print(f"├── Total Usage: {round(total_usage, 2)} kWh")
-            print(f"└── Average Hourly: {round(total_usage/len(hourly_data), 2) if hourly_data else 0} kWh")
+            print(f"├── Total Import: {total_import:.2f} kWh")
+            print(f"├── Total Export: {total_export:.2f} kWh")
+            print(f"└── Total Net: {total_net:.2f} kWh")
             
             self.pubnub_handler.publish_data(response, 'Channel-Query')
             self.last_energy_update = datetime.now()

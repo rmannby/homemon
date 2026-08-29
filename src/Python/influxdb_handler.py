@@ -19,7 +19,9 @@ class InfluxDBHandler:
         """Get hourly energy usage for specified time range"""
         try:
             query = f"""
-                SELECT SPREAD("import_kwh") as hourly_usage
+                SELECT
+                    SPREAD("import_kwh") AS hourly_import_kwh,
+                    SPREAD("export_kwh") AS hourly_export_kwh
                 FROM energy_usage
                 WHERE time >= '{start_time}' AND time <= '{end_time}'
                 GROUP BY time(1h)

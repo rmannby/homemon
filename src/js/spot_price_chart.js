@@ -297,7 +297,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
 
     if (showConsumption) {
         datasets.push({
-            label: 'Förbrukning (kWh)',
+            label: 'Nettoförbrukning (kWh)',
             data: [], // Will be populated by energyDataReceived event
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
@@ -313,7 +313,8 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
             // Simplest possible gap configuration
             spanGaps: false,
             // Ensure line is always rendered on top
-            z: 1000
+            z: 1000,
+            hourlyEnergyDetails: []
         });
     }
 
@@ -337,6 +338,19 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                             borderColor: 'rgb(255, 99, 132)',
                             borderWidth: 3,
                             borderDash: [8, 4]
+                        },
+                        {
+                            type: 'line',
+                            scaleID: 'y1',
+                            value: 0,
+                            borderColor: 'rgba(220, 220, 220, 0.9)',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            label: {
+                                display: true,
+                                content: '0 kWh',
+                                position: 'start'
+                            }
                         }
                     ]
                 },
@@ -394,7 +408,9 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                             if (showConsumption && original.length > 1) {
                                 // Find the consumption dataset in the original legends
                                 const consumptionLegend = original.find(item => 
-                                    item.text && (item.text.includes('Förbrukning') || item.datasetIndex === 1)
+                                    item.datasetIndex === chart.data.datasets.findIndex(
+                                        dataset => dataset.type === 'line'
+                                    )
                                 );
                                 
                                 if (consumptionLegend) {
@@ -456,7 +472,14 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                 
                                 return tooltipLines;
                             } else {
-                                // Consumption line
+                                const detail = context.dataset.hourlyEnergyDetails?.[dataIndex];
+                                if (detail) {
+                                    return [
+                                        `Netto: ${detail.netKwh.toFixed(3)} kWh`,
+                                        `Import: ${detail.importKwh.toFixed(3)} kWh`,
+                                        `Export: ${detail.exportKwh.toFixed(3)} kWh`
+                                    ];
+                                }
                                 return `${context.dataset.label}: ${context.parsed.y} kWh`;
                             }
                         }
@@ -478,9 +501,11 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                 y1: {
                     type: 'linear',
                     position: 'right',
-                    title: { display: showConsumption, text: 'kWh' },
+                    title: { display: showConsumption, text: 'Nettoenergi (kWh)' },
                     grid: { drawOnChartArea: false },
                     display: showConsumption,
+                    beginAtZero: true,
+                    grace: '10%',
                     suggestedMin: 0,
                     suggestedMax: 1
                 },
@@ -729,23 +754,34 @@ window.addEventListener('energyDataReceived', function(e) {
     }
 
     const energyData = new Array(24).fill(NaN);
+    const hourlyEnergyDetails = new Array(24).fill(null);
     rawData.hourly_usage.forEach(hourData => {
         const hour = hourData.hour;
         if (hour >= 0 && hour < 24) {
-            energyData[hour] = hourData.usage_kwh;
+            const netKwh = Number(hourData.net_kwh ?? hourData.usage_kwh);
+            energyData[hour] = netKwh;
+            hourlyEnergyDetails[hour] = {
+                importKwh: Number(hourData.import_kwh ?? Math.max(netKwh, 0)),
+                exportKwh: Number(hourData.export_kwh ?? Math.max(-netKwh, 0)),
+                netKwh
+            };
         }
     });
 
     let displayData = energyData;
+    let displayEnergyDetails = hourlyEnergyDetails;
     if (selectedValue === 0) {
         const currentHour = new Date().getHours();
         // Exclude current hour from line graph (it's incomplete)
         displayData = energyData.slice(0, currentHour);
+        displayEnergyDetails = hourlyEnergyDetails.slice(0, currentHour);
     }
 
-    const totalEnergy = displayData
-        .filter(val => !isNaN(val) && val !== null)
-        .reduce((sum, val) => sum + Number(val), 0);
+    const displayedHours = displayEnergyDetails.filter(detail => detail !== null);
+    const totalImport = displayedHours.reduce((sum, detail) => sum + detail.importKwh, 0);
+    const totalExport = displayedHours.reduce((sum, detail) => sum + detail.exportKwh, 0);
+    const totalNet = displayedHours.reduce((sum, detail) => sum + detail.netKwh, 0);
+    const netDirection = totalNet > 0 ? 'Nettoimport' : totalNet < 0 ? 'Nettoexport' : 'Netto';
 
     const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
         dataset => dataset.type === 'line'
@@ -754,27 +790,13 @@ window.addEventListener('energyDataReceived', function(e) {
     if (consumptionDatasetIndex !== -1) {
         const consumptionDataset = window.priceChart.chartInstance.data.datasets[consumptionDatasetIndex];
         consumptionDataset.data = displayData;
-        consumptionDataset.label = `Förbrukning (${totalEnergy.toFixed(1)} kWh)`;
+        consumptionDataset.hourlyEnergyDetails = displayEnergyDetails;
+        consumptionDataset.label = `${netDirection} (${Math.abs(totalNet).toFixed(1)} kWh)`;
 
         if (selectedValue === 0 || selectedValue === -1) {
-            const pricesArray = selectedValue === 0 
-                ? window.priceChart.pricesToday 
-                : window.priceChart.pricesYesterday;
-
-            if (pricesArray && pricesArray.length > 0) {
-                const prices = pricesArray.map(Number);
-                let totalCost = 0;
-
-                for (let i = 0; i < Math.min(displayData.length, prices.length); i++) {
-                    const consumption = displayData[i];
-                    if (!isNaN(consumption) && consumption !== null) {
-                        totalCost += consumption * prices[i];
-                    }
-                }
-                
-                window.priceChart.chartInstance.options.plugins.title.text = 
-                    `Förbrukningskostnad (${totalCost.toFixed(2)} SEK)`;
-            }
+            window.priceChart.chartInstance.options.plugins.title.text =
+                `${netDirection}: ${Math.abs(totalNet).toFixed(1)} kWh ` +
+                `(Import: ${totalImport.toFixed(1)} kWh, Export: ${totalExport.toFixed(1)} kWh)`;
         }
 
         window.priceChart.chartInstance.update();
