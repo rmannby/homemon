@@ -1,5 +1,6 @@
 import os
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 def get_influx_config() -> Dict[str, Any]:
     """Get InfluxDB configuration from environment variables or defaults"""

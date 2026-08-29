@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(isort --check-only src/Python/)"
+    ]
+  }
+}

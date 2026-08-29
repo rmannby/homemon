@@ -13,7 +13,7 @@
   "author": "Roger Mannby",
   "license": "ISC",
   "devDependencies": {
-    "http-server": "^0.10.0"
+    "http-server": "^14.1.1"
   },
   "bugs": {
     "url": "https://github.com/rmannby/homemon/issues"

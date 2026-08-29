@@ -1,16 +1,16 @@
 # xbeegw.py
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
-import time
 import json
+import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
-from influxdb_handler import InfluxDBHandler
-from homewizard_handler import HomeWizardHandler
-from xbee_handler import XBeeHandler
-from pubnub_handler import PubNubHandler
+from config import (GATEWAY_CONFIG, HOMEWIZARD_CONFIG, INFLUX_CONFIG,
+                    PUBNUB_CONFIG, XBEE_CONFIG)
 from electricityprices_handler import get_electricity_prices
-from config import (INFLUX_CONFIG, HOMEWIZARD_CONFIG, 
-                   PUBNUB_CONFIG, XBEE_CONFIG, GATEWAY_CONFIG)
+from homewizard_handler import HomeWizardHandler
+from influxdb_handler import InfluxDBHandler
+from pubnub_handler import PubNubHandler
+from xbee_handler import XBeeHandler
 
 # Constants
 PUBNUB_CHANNEL = 'RpiGate'

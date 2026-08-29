@@ -1,7 +1,9 @@
 # influxdb_handler.py
-from influxdb import InfluxDBClient
-from typing import Dict, Any, Tuple, List
 from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
+from influxdb import InfluxDBClient
+
 
 class InfluxDBHandler:
     def __init__(self, host: str = 'localhost', port: int = 8086, database: str = 'energy_monitoring'):

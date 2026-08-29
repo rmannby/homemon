@@ -1,7 +1,11 @@
-import serial, time, datetime, sys
+import datetime
+import sys
+import time
+
+import serial
+from pubnub.callbacks import SubscribeCallback
 from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
-from pubnub.callbacks import SubscribeCallback
 #from pubnub.pubnub import Pubnub
 from xbee import ZigBee
 

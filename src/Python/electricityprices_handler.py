@@ -1,6 +1,7 @@
-from urllib import request
-from datetime import datetime
 import json
+from datetime import datetime
+from urllib import request
+
 
 BIXIA_VARIABLE_SURCHARGE = 5.00 / 100
 VATTENFALL_TRANSMISSION = 35.60 / 100
