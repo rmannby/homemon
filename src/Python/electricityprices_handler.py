@@ -2,6 +2,11 @@ from urllib import request
 from datetime import datetime
 import json
 
+BIXIA_VARIABLE_SURCHARGE = 5.00 / 100
+VATTENFALL_TRANSMISSION = 35.60 / 100
+ENERGY_TAX = 36.00 / 100
+VAT_RATE = 0.25
+
 def get_electricity_prices(date=None, price_region="SE3"):
     """
     Hämtar eltimpriser för vald region och datum och konverterar till InfluxDB line protocol
@@ -39,9 +44,14 @@ def get_electricity_prices(date=None, price_region="SE3"):
             # Convert to Unix timestamp in nanoseconds
             timestamp_ns = int(timestamp.timestamp() * 1_000_000_000)
             
-            # Apply Vattenfall's price formula
+            # Apply Bixia's surcharge, Vattenfall's network costs, and VAT.
             spot_price = price_data["SEK_per_kWh"]
-            final_price = (spot_price * 1.25) + (13.53/100)
+            final_price = (
+                spot_price
+                + BIXIA_VARIABLE_SURCHARGE
+                + VATTENFALL_TRANSMISSION
+                + ENERGY_TAX
+            ) * (1 + VAT_RATE)
             
             # Create line protocol entry for calculated price
             line = f'electricity_price,region={price_region} price={final_price} {timestamp_ns}'

@@ -38,20 +38,18 @@ if (selector) {
     selector.parentNode.insertBefore(asterisk, selector.nextSibling);
 }
 
-// Distribution costs (öre/kWh)
+// Vattenfall network costs (öre/kWh)
 const DISTRIBUTION_COSTS = {
-    TRANSMISSION: 31.20,    // Elöverföring
-    ENERGY_TAX: 43.90      // Energiskatt
+    TRANSMISSION: 35.60,    // Elöverföring
+    ENERGY_TAX: 36.00       // Energiskatt
 };
 
 // Calculate total distribution cost
 const TOTAL_DISTRIBUTION = Object.values(DISTRIBUTION_COSTS).reduce((a, b) => a + b, 0) / 100;
 
-// Sales costs (öre/kWh)
+// Bixia sales costs (öre/kWh)
 const SALES_COSTS = {
-    VARIABLE: 3.54,                    // Rörliga kostnader
-    FIXED_SPOT: 7.00,                  // Fast påslag spot
-    FIXED_CERTIFICATE: 1.40            // Fast påslag elcertifikat
+    VARIABLE: 5.00                     // Rörligt påslag
 };
 
 // Calculate total sales cost
@@ -252,15 +250,15 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
     const getComponentColors = (hour, isCurrentHour, componentIndex) => {
         const baseColors = [
             'rgba(13, 71, 161, 0.8)',   // Spot price - dark blue
-            'rgba(25, 118, 210, 0.8)',  // Sales - medium blue  
-            'rgba(66, 165, 245, 0.8)'   // Distribution - light blue
+            'rgba(25, 118, 210, 0.8)',  // Bixia - medium blue
+            'rgba(66, 165, 245, 0.8)'   // Vattenfall - light blue
         ];
         
         if (highlightCurrentHour && hour === currentHour) {
             const brighterColors = [
                 'rgba(13, 71, 161, 0.9)',   // Spot price - slightly brighter
-                'rgba(25, 118, 210, 0.9)',  // Sales - slightly brighter
-                'rgba(66, 165, 245, 0.9)'   // Distribution - slightly brighter
+            'rgba(25, 118, 210, 0.9)',  // Bixia - slightly brighter
+            'rgba(66, 165, 245, 0.9)'   // Vattenfall - slightly brighter
             ];
             return brighterColors[componentIndex];
         } else {
@@ -363,7 +361,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                     index: 0
                                 },
                                 {
-                                    text: 'Försäljning',
+                                    text: 'Bixia',
                                     fillStyle: 'rgba(25, 118, 210, 0.8)',
                                     strokeStyle: 'rgba(25, 118, 210, 0.9)',
                                     lineWidth: 1,
@@ -371,7 +369,7 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                     index: 1
                                 },
                                 {
-                                    text: 'Distribution',
+                                    text: 'Vattenfall',
                                     fillStyle: 'rgba(66, 165, 245, 0.8)',
                                     strokeStyle: 'rgba(66, 165, 245, 0.9)',
                                     lineWidth: 1,
@@ -435,8 +433,8 @@ const renderChart = (labels, prices, spotPricesRaw, showConsumption = true, high
                                 // Main cost breakdown
                                 const tooltipLines = [
                                     `Spotpris (genomsnitt): ${spotPrice.toFixed(4)} SEK/kWh`,
-                                    `Försäljning: ${salesCostWithVAT.toFixed(4)} SEK/kWh`,
-                                    `Distribution: ${distributionCostWithVAT.toFixed(4)} SEK/kWh`,
+                                    `Bixia: ${salesCostWithVAT.toFixed(4)} SEK/kWh`,
+                                    `Vattenfall: ${distributionCostWithVAT.toFixed(4)} SEK/kWh`,
                                     `Total: ${total.toFixed(4)} SEK/kWh`
                                 ];
                                 
