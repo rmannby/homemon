@@ -63,6 +63,34 @@ const AVG_SPOTPRICE_LAST_YEAR = 40.88 / 100;
 // VAT rate (25%)
 const VAT_RATE = 0.25;
 
+const calculateVariableNetCost = (hourlyEnergyDetails, spotPricesRaw) => {
+    let importCost = 0;
+    let exportValue = 0;
+    let pricedHours = 0;
+
+    hourlyEnergyDetails.forEach((detail, hour) => {
+        if (!detail) return;
+
+        const spotPrice = Number(spotPricesRaw[hour]);
+        if (!Number.isFinite(spotPrice)) return;
+
+        // Import is charged at spot price, Bixia's surcharge, and Vattenfall's
+        // variable distribution costs, including VAT.
+        importCost += detail.importKwh *
+            (spotPrice + TOTAL_SALES + TOTAL_DISTRIBUTION) * (1 + VAT_RATE);
+        // Export is valued at the hourly spot price; any separate export premium is excluded.
+        exportValue += detail.exportKwh * spotPrice;
+        pricedHours += 1;
+    });
+
+    return {
+        importCost,
+        exportValue,
+        netCost: importCost - exportValue,
+        pricedHours
+    };
+};
+
 const fetchElectricityPrices = async (dayOffset = 0) => {
     try {
         const today = new Date();
@@ -777,6 +805,10 @@ window.addEventListener('energyDataReceived', function(e) {
     const totalExport = displayedHours.reduce((sum, detail) => sum + detail.exportKwh, 0);
     const totalNet = displayedHours.reduce((sum, detail) => sum + detail.netKwh, 0);
     const netDirection = totalNet > 0 ? 'Nettoimport' : totalNet < 0 ? 'Nettoexport' : 'Netto';
+    const spotPricesRaw = selectedValue === 0
+        ? window.priceChart.spotPricesRawToday
+        : window.priceChart.spotPricesRawYesterday;
+    const variableNetCost = calculateVariableNetCost(displayEnergyDetails, spotPricesRaw);
 
     const consumptionDatasetIndex = window.priceChart.chartInstance.data.datasets.findIndex(
         dataset => dataset.type === 'line'
@@ -789,9 +821,13 @@ window.addEventListener('energyDataReceived', function(e) {
         consumptionDataset.label = `${netDirection} (${Math.abs(totalNet).toFixed(1)} kWh)`;
 
         if (selectedValue === 0 || selectedValue === -1) {
+            const netCostPrefix = variableNetCost.netCost < 0 ? '-' : '';
             window.priceChart.chartInstance.options.plugins.title.text =
                 `${netDirection}: ${Math.abs(totalNet).toFixed(1)} kWh ` +
-                `(Import: ${totalImport.toFixed(1)} kWh, Export: ${totalExport.toFixed(1)} kWh)`;
+                `(Import: ${totalImport.toFixed(1)} kWh, Export: ${totalExport.toFixed(1)} kWh)` +
+                (variableNetCost.pricedHours > 0
+                    ? ` — Rörlig nettokostnad: ${netCostPrefix}${Math.abs(variableNetCost.netCost).toFixed(2)} SEK`
+                    : '');
         }
 
         window.priceChart.chartInstance.update();
